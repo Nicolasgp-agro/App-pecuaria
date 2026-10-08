@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hato Claro</title>
+<meta name="description" content="Registro de hato, leche, ciclos reproductivos y sanidad para fincas lecheras.">
+<meta name="theme-color" content="#1f6b45">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-64.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hato Claro">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="appbar">
+  <div class="brand">
+    <img src="icons/icon-192.png" alt="" width="34" height="34">
+    <div>
+      <div class="brand-name">Hato Claro</div>
+      <div class="brand-sub" id="fincaNombre">Mi finca</div>
+    </div>
+  </div>
+  <span class="fecha" id="fechaHoy"></span>
+</header>
+
+<div class="aviso" id="avisoUpdate" hidden>
+  <span>Hay una versión nueva de Hato Claro.</span>
+  <button class="btn sm" id="btnUpdate" type="button">Actualizar</button>
+</div>
+
+<main class="wrap">
+  <section id="v-inicio" class="vista"></section>
+  <section id="v-hato" class="vista" hidden></section>
+  <section id="v-leche" class="vista" hidden></section>
+  <section id="v-ciclos" class="vista" hidden></section>
+  <section id="v-mas" class="vista" hidden></section>
+</main>
+
+<button class="fab" id="fab" type="button" aria-label="Registrar">
+  <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+</button>
+
+<nav class="tabbar" aria-label="Secciones">
+  <button type="button" data-v="inicio" aria-current="page">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Inicio</button>
+  <button type="button" data-v="hato">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9c-1.5-1-2-3-1-4 1.5 0 3 1 3.5 2h9c.5-1 2-2 3.5-2 1 1 .5 3-1 4v6c0 3-3 5-7 5s-7-2-7-5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="9.5" cy="12" r="1.2" fill="currentColor"/><circle cx="14.5" cy="12" r="1.2" fill="currentColor"/></svg>Hato</button>
+  <button type="button" data-v="leche">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3s-6 7-6 11a6 6 0 0 0 12 0c0-4-6-11-6-11z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Leche</button>
+  <button type="button" data-v="ciclos">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 10h16M9 3v4M15 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Ciclos</button>
+  <button type="button" data-v="mas">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="18" cy="12" r="1.8" fill="currentColor"/></svg>Más</button>
+</nav>
+
+<div id="sheetHost"></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="vendor/xlsx.full.min.js" defer></script>
+<script src="app.js" defer></script>
+</body>
+</html>

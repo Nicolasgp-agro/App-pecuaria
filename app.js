@@ -3,10 +3,10 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const GEST = 283, SECADO = 60, ESPERA = 45;
-const COLS = ["animales", "eventos", "entregas", "calidad", "config"];
-const S = { animales: [], eventos: [], entregas: [], calidad: [], config: [] };
+const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "config"];
+const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], config: [] };
 let vista = "inicio", filtroHato = "", memOnly = false, instalarEvt = null;
 
 /* ---------- utilidades ---------- */
@@ -43,7 +43,7 @@ let idb = null;
 function abrirDB() {
   return new Promise((res, rej) => {
     if (!("indexedDB" in window)) return rej(new Error("sin indexedDB"));
-    const r = indexedDB.open("hato-claro", 1);
+    const r = indexedDB.open("hato-claro", 2);
     r.onupgradeneeded = () => { const db = r.result; COLS.forEach((c) => { if (!db.objectStoreNames.contains(c)) db.createObjectStore(c, { keyPath: "id" }); }); };
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
@@ -112,7 +112,10 @@ function resumenLeche() {
   const mes = hoy().slice(0, 7);
   const delMes = e.filter((x) => x.fecha.startsWith(mes));
   const totMes = delMes.reduce((s, x) => s + x.litros, 0);
-  return { ult, prom7, totMes, diasMes: delMes.length };
+  const fin = ult ? ult.fecha : hoy();
+  const sem = e.filter((x) => x.fecha > add(fin, -7) && x.fecha <= fin);
+  const litrosDia = sem.length ? sem.reduce((s, x) => s + x.litros, 0) / 7 : null;
+  return { ult, prom7, totMes, diasMes: delMes.length, litrosDia };
 }
 function alertas() {
   const out = [], h = hoy();
@@ -200,9 +203,11 @@ function vInicio() {
       <p class="muted">Lleve el registro de su hato, la leche que entrega, los partos, servicios y tratamientos. Todo queda guardado en este celular y funciona sin señal.</p>
       <label class="f">Nombre de la finca<input id="wNombre" value="${esc(cfg().nombre)}" placeholder="Ej. Finca La Esperanza" autocomplete="off"></label>
       <button class="btn block" id="wEmpezar" type="button">Empezar con mi finca</button>
+      <button class="btn ghost block" id="wPDF" type="button">Empezar cargando la liquidación de Colanta</button>
       <button class="btn ghost block" id="wEjemplo" type="button">Ver primero con datos de ejemplo</button>
     </div>`;
     $("#wEmpezar").onclick = async () => { await save("config", { ...cfg(), nombre: $("#wNombre").value.trim() }); formAnimal(); };
+    $("#wPDF").onclick = async () => { if ($("#wNombre").value.trim()) await save("config", { ...cfg(), nombre: $("#wNombre").value.trim() }); pedirPDF(); };
     $("#wEjemplo").onclick = async () => { if ($("#wNombre").value.trim()) await save("config", { ...cfg(), nombre: $("#wNombre").value.trim() }); await cargarEjemplo(); toast("Datos de ejemplo cargados"); render(); };
     return;
   }
@@ -219,9 +224,9 @@ function vInicio() {
     <div class="kpis">
       <div class="kpi hero"><div><span class="eyebrow">${L.ult ? (L.ult.fecha === hoy() ? "Entregado hoy" : "Última entrega · " + fmt(L.ult.fecha)) : "Leche entregada"}</span><b class="num">${L.ult ? nf(L.ult.litros) + " L" : "–"}</b>${delta}</div>
         ${entregaHoy ? "" : `<button class="btn" id="qEntrega" type="button">Registrar leche de hoy</button>`}</div>
-      <div class="kpi"><span class="eyebrow">Vacas en ordeño</span><b>${lact.length}</b><span class="small muted">${L.ult && lact.length ? nf(L.ult.litros / lact.length, 1) + " L por vaca" : "&nbsp;"}</span></div>
+      <div class="kpi"><span class="eyebrow">Vacas en ordeño</span><b>${lact.length}</b><span class="small muted">${L.litrosDia && lact.length ? nf(L.litrosDia / lact.length, 1) + " L por vaca al día" : "&nbsp;"}</span></div>
       <div class="kpi"><span class="eyebrow">Preñadas</span><b>${adultas.length ? Math.round((pren.length / adultas.length) * 100) + "%" : "–"}</b><span class="small muted">${pren.length} de ${adultas.length} vacas</span></div>
-      <div class="kpi"><span class="eyebrow">Leche del mes</span><b>${nf(L.totMes)} L</b><span class="small muted">${L.diasMes} días registrados</span></div>
+      <div class="kpi"><span class="eyebrow">Leche del mes</span><b>${nf(L.totMes)} L</b><span class="small muted">${L.litrosDia ? nf(L.litrosDia) + " L por día" : "&nbsp;"}</span></div>
       <div class="kpi"><span class="eyebrow">Ingreso estimado</span><b>${precio ? pesos(L.totMes * precio) : "–"}</b><span class="small muted">${precio ? "a " + pesos(precio) + " por litro" : `<button class="btn ghost sm" id="qPrecio" type="button">Poner precio</button>`}</span></div>
     </div>
     <div class="stack">
@@ -232,11 +237,11 @@ function vInicio() {
       <h2>Registro rápido</h2>
       <div class="acciones">
         <button class="accion" data-q="entrega" type="button"><b>Leche entregada</b><span class="small muted">Litros del día</span></button>
+        <button class="accion" data-q="pdf" type="button"><b>Liquidación Colanta</b><span class="small muted">Cargar el PDF</span></button>
         <button class="accion" data-q="obs" type="button"><b>Observación</b><span class="small muted">Bajó leche, ubre, cojera</span></button>
         <button class="accion" data-q="tratamiento" type="button"><b>Tratamiento</b><span class="small muted">Con días de retiro</span></button>
         <button class="accion" data-q="nac" type="button"><b>Nacimiento</b><span class="small muted">Parto y cría</span></button>
         <button class="accion" data-q="servicio" type="button"><b>Servicio</b><span class="small muted">Monta o inseminación</span></button>
-        <button class="accion" data-q="prenez" type="button"><b>Diagnóstico</b><span class="small muted">Preñada o vacía</span></button>
       </div>
     </div>`;
   const q = $("#qEntrega"); if (q) q.onclick = () => formEntrega();
@@ -246,7 +251,7 @@ function vInicio() {
 function abrir(q, arete) {
   ({ entrega: () => formEntrega(), obs: () => formObs(arete), tratamiento: () => formEvento("tratamiento", arete), nac: () => formNacimiento(arete),
      servicio: () => formEvento("servicio", arete), prenez: () => formEvento("prenez", arete), evento: () => formEvento("celo", arete),
-     animal: () => formAnimal(), calidad: () => formCalidad(), secado: () => formEvento("secado", arete), vacuna: () => formEvento("vacuna", arete) })[q]();
+     animal: () => formAnimal(), calidad: () => formCalidad(), pdf: () => pedirPDF(), secado: () => formEvento("secado", arete), vacuna: () => formEvento("vacuna", arete) })[q]();
 }
 
 function vHato() {
@@ -294,32 +299,127 @@ function vLeche() {
   const rec = entregasOrden().reverse().slice(0, 15);
   const q = [...S.calidad].sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
   const u = q[0];
-  const bar = (v, lo, hi, good) => `<div class="qbar"><i style="width:${Math.max(4, Math.min(100, ((v - lo) / (hi - lo)) * 100))}%;background:var(${good ? "--ok" : "--bad"})"></i></div>`;
+  const liqs = [...S.liquidaciones].sort((a, b) => (a.hasta < b.hasta ? 1 : -1));
+  const lq = liqs[0];
+  const bar = (v, lo, hi, color) => `<div class="qbar"><i style="width:${Math.max(4, Math.min(100, ((v - lo) / (hi - lo)) * 100))}%;background:var(${color})"></i></div>`;
+  const param = (nombre, v, unidad, dec, lo, hi, color) => v == null ? "" : `<div>${nombre} <b class="num">${nf(v, dec)}${unidad}</b>${bar(v, lo, hi, color)}</div>`;
+  const conc = lq && lq.compras ? lq.compras.find((c) => /CONCENTRADO/i.test(c.grupo)) : null;
+  const hayGP = q.some((r) => r.grasa != null || r.proteina != null);
   el.innerHTML = `
     <div class="row spread"><h2>Leche entregada</h2><button class="btn sm" id="lNueva" type="button">+ Registrar</button></div>
+    <button class="btn ghost block" id="lPDF" type="button">Cargar liquidación de Colanta (PDF)</button>
     <div class="kpis">
-      <div class="kpi"><span class="eyebrow">Este mes</span><b>${nf(L.totMes)} L</b><span class="small muted">${L.diasMes ? nf(L.totMes / L.diasMes) + " L por día" : "&nbsp;"}</span></div>
+      <div class="kpi"><span class="eyebrow">Este mes</span><b>${nf(L.totMes)} L</b><span class="small muted">${L.litrosDia ? nf(L.litrosDia) + " L por día" : "&nbsp;"}</span></div>
       <div class="kpi"><span class="eyebrow">Ingreso estimado</span><b>${precio ? pesos(L.totMes * precio) : "–"}</b><span class="small muted">${precio ? "a " + pesos(precio) + "/L" : "Ponga el precio en Más"}</span></div>
     </div>
-    <div class="panel"><div class="row spread"><h3>Últimos 30 días</h3><span class="small muted">litros por día</span></div>
+    ${lq ? `<div class="panel stack">
+      <div class="row spread"><h3>Liquidación semana ${lq.semana ?? ""}</h3><span class="small muted">${fmt(lq.desde)} al ${fmt(lq.hasta)}</span></div>
+      <div class="kpis">
+        <div class="kpi"><span class="eyebrow">Litros</span><b>${nf(lq.litros)}</b><span class="small muted">${nf(lq.litros / 7)} L por día</span></div>
+        <div class="kpi"><span class="eyebrow">Neto a pagar</span><b>${pesos(lq.neto)}</b><span class="small muted">pago ${fmt(lq.fechaLiquidacion)}</span></div>
+      </div>
+      <div class="tablewrap"><table>
+        <tr><th>Concepto</th><th class="r">$ por litro</th><th class="r">Total</th></tr>
+        ${lq.precioBase != null ? `<tr><td>Precio base por sólidos</td><td class="r">${pesos(lq.precioBase)}</td><td class="r">${pesos(lq.ingresoBase)}</td></tr>` : ""}
+        ${(lq.bonificaciones || []).map((b) => `<tr><td>${esc(capital(b.concepto))}</td><td class="r">+${pesos(b.porLitro)}</td><td class="r">${pesos(b.total)}</td></tr>`).join("")}
+        <tr><td><b>Precio por litro</b></td><td class="r"><b>${pesos(lq.precioLitro)}</b></td><td class="r">${pesos(lq.ingresoBruto)}</td></tr>
+        ${lq.fleteLitro != null ? `<tr><td>Flete</td><td class="r">−${pesos(lq.fleteLitro)}</td><td class="r">−${pesos(lq.flete)}</td></tr>` : ""}
+        <tr><td><b>Pagado por litro</b></td><td class="r"><b>${pesos(lq.precioPagado)}</b></td><td class="r"><b>${pesos(lq.ingresoLeche)}</b></td></tr>
+        ${(lq.deducciones || []).map((d) => `<tr><td>${esc(capital(d.concepto))}</td><td></td><td class="r">−${pesos(d.valor)}</td></tr>`).join("")}
+        <tr><td><b>Neto a pagar</b></td><td></td><td class="r"><b>${pesos(lq.neto)}</b></td></tr>
+      </table></div>
+      ${conc ? `<div class="alerta info"><span class="quien">Compras en Agrocolanta esta semana</span><span>Concentrado y sales: ${nf(conc.kg)} kg por ${pesos(conc.valor)}, el ${nf((conc.valor / lq.ingresoLeche) * 100)}% de lo que le pagaron por la leche (${pesos(conc.valor / lq.litros)} por litro). Son compras de la semana, no necesariamente lo que comieron.</span></div>` : ""}
+      ${liqs.length > 1 ? `<div><span class="eyebrow">Semanas anteriores</span><div class="tablewrap"><table><tr><th>Semana</th><th class="r">Litros</th><th class="r">$/L pagado</th><th class="r">Neto</th></tr>${liqs.map((x) => `<tr><td>${x.semana ?? ""} · ${fmt(x.hasta)}</td><td class="r">${nf(x.litros)}</td><td class="r">${pesos(x.precioPagado)}</td><td class="r">${pesos(x.neto)}</td></tr>`).join("")}</table></div></div>` : ""}
+    </div>` : ""}
+    <div class="panel"><div class="row spread"><h3>Últimos 30 días</h3><span class="small muted">litros por día de entrega</span></div>
       <div class="chart">${vals.some((v) => v != null) ? `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Litros entregados por día">${svg}</svg>` : `<div class="empty">Aún no hay entregas en los últimos 30 días.</div>`}</div></div>
     <div class="panel"><h3>Entregas recientes</h3>
-      ${rec.length ? `<div class="tablewrap"><table><tr><th>Fecha</th><th class="r">Mañana</th><th class="r">Tarde</th><th class="r">Total</th><th></th></tr>${rec.map((e) => `<tr><td>${fmt(e.fecha)}</td><td class="r">${e.am != null ? nf(e.am) : "–"}</td><td class="r">${e.pm != null ? nf(e.pm) : "–"}</td><td class="r"><b>${nf(e.litros)}</b></td><td><button class="btn ghost sm" type="button" data-e="${e.id}">Editar</button></td></tr>`).join("")}</table></div>` : `<p class="muted small" style="margin-top:8px">Sin entregas registradas.</p>`}
+      ${rec.length ? `<div class="tablewrap"><table><tr><th>Fecha</th><th class="r">Mañana</th><th class="r">Tarde</th><th class="r">Total</th><th class="r">°C</th><th></th></tr>${rec.map((e) => `<tr><td>${fmt(e.fecha)}${e.fuente === "colanta" ? ' <span class="chip">Colanta</span>' : ""}</td><td class="r">${e.am != null ? nf(e.am) : "–"}</td><td class="r">${e.pm != null ? nf(e.pm) : "–"}</td><td class="r"><b>${nf(e.litros)}</b></td><td class="r">${e.temp != null ? nf(e.temp, 1) : "–"}</td><td><button class="btn ghost sm" type="button" data-e="${e.id}">Editar</button></td></tr>`).join("")}</table></div>` : `<p class="muted small" style="margin-top:8px">Sin entregas registradas.</p>`}
     </div>
     <div class="row spread"><h2>Calidad de la leche</h2><button class="btn ghost sm" id="lCal" type="button">+ Análisis</button></div>
-    ${u ? `<div class="panel"><span class="eyebrow">Último análisis · ${fmt(u.fecha)}</span>
+    ${u ? `<div class="panel"><span class="eyebrow">Último análisis · ${u.semana ? "semana " + u.semana + " · " : ""}${fmt(u.fecha)}</span>
       <div class="grid2" style="margin-top:10px">
-        <div>Grasa <b class="num">${nf(u.grasa, 2)} %</b>${u.grasa != null ? bar(u.grasa, 2.5, 5, u.grasa >= 3.2) : ""}</div>
-        <div>Proteína <b class="num">${nf(u.proteina, 2)} %</b>${u.proteina != null ? bar(u.proteina, 2.5, 4, u.proteina >= 3) : ""}</div>
-        <div>Células somáticas <b class="num">${nf(u.ccs)}</b>${u.ccs != null ? bar(u.ccs, 0, 800000, u.ccs <= 400000) : ""}</div>
-        <div>Bacterias (UFC) <b class="num">${nf(u.ufc)}</b>${u.ufc != null ? bar(u.ufc, 0, 400000, u.ufc <= 200000) : ""}</div>
+        ${param("Sólidos totales", u.solidos, " %", 2, 11, 14, "--milk")}
+        ${param("Grasa", u.grasa, " %", 2, 2.5, 5, "--milk")}
+        ${param("Proteína", u.proteina, " %", 2, 2.5, 4, "--milk")}
+        ${param("Células somáticas", u.ccs, "", 0, 0, 800000, u.ccs > 400000 ? "--bad" : "--ok")}
+        ${param("Bacterias (UFC)", u.ufc, "", 0, 0, 400000, u.ufc > 200000 ? "--bad" : "--ok")}
+        ${param("Urea (MUN)", u.mun, " mg/dl", 1, 0, 25, "--milk")}
       </div></div>
-      <div class="panel"><div class="tablewrap"><table><tr><th>Fecha</th><th class="r">Grasa</th><th class="r">Proteína</th><th class="r">Sólidos</th><th class="r">CCS</th><th class="r">UFC</th></tr>${q.map((r) => `<tr><td>${fmt(r.fecha)}</td><td class="r">${nf(r.grasa, 2)}</td><td class="r">${nf(r.proteina, 2)}</td><td class="r">${nf(r.solidos, 2)}</td><td class="r" style="color:${r.ccs > 400000 ? "var(--bad)" : "inherit"}">${nf(r.ccs)}</td><td class="r" style="color:${r.ufc > 200000 ? "var(--bad)" : "inherit"}">${nf(r.ufc)}</td></tr>`).join("")}</table></div></div>`
-    : `<div class="empty">Agregue los resultados que le entrega el comprador o el laboratorio.</div>`}
+      <div class="panel"><div class="tablewrap"><table><tr><th>Semana</th><th class="r">Sólidos %</th>${hayGP ? '<th class="r">Grasa</th><th class="r">Proteína</th>' : ""}<th class="r">Células</th><th class="r">UFC</th><th class="r">MUN</th></tr>${q.map((r) => `<tr><td>${r.semana ? r.semana + " · " : ""}${fmt(r.fecha)}</td><td class="r">${nf(r.solidos, 2)}</td>${hayGP ? `<td class="r">${nf(r.grasa, 2)}</td><td class="r">${nf(r.proteina, 2)}</td>` : ""}<td class="r" style="color:${r.ccs > 400000 ? "var(--bad)" : "inherit"}">${nf(r.ccs)}</td><td class="r" style="color:${r.ufc > 200000 ? "var(--bad)" : "inherit"}">${nf(r.ufc)}</td><td class="r">${nf(r.mun, 1)}</td></tr>`).join("")}</table></div></div>`
+    : `<div class="empty">Cargue la liquidación de Colanta o escriba los resultados del laboratorio.</div>`}
     <p class="small muted">Alertas de calidad: células somáticas sobre 400.000 por mL y bacterias sobre 200.000 UFC por mL. Compárelas con la tabla de pago de su comprador.</p>`;
   $("#lNueva").onclick = () => formEntrega();
+  $("#lPDF").onclick = pedirPDF;
   $("#lCal").onclick = () => formCalidad();
   $$("[data-e]", el).forEach((b) => (b.onclick = () => formEntrega(S.entregas.find((x) => x.id === b.dataset.e))));
+}
+
+const capital = (t) => { const s = String(t || "").toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); };
+
+/* ---------- liquidación de Colanta en PDF ---------- */
+let pdfLib = null;
+function cargarPdfjs() {
+  if (pdfLib) return Promise.resolve(pdfLib);
+  return new Promise((res, rej) => {
+    const sc = document.createElement("script"); sc.src = "vendor/pdf.min.js";
+    sc.onload = () => { pdfLib = window.pdfjsLib; pdfLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js"; res(pdfLib); };
+    sc.onerror = () => rej(new Error("No se pudo cargar el lector de PDF"));
+    document.head.appendChild(sc);
+  });
+}
+function pedirPDF() {
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "application/pdf,.pdf"; inp.multiple = true;
+  inp.onchange = () => leerPDFs([...inp.files]);
+  inp.click();
+}
+async function textoPDF(file) {
+  const lib = await cargarPdfjs();
+  const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const pages = [];
+  for (let p = 1; p <= doc.numPages; p++) { const tc = await (await doc.getPage(p)).getTextContent(); pages.push(tc.items.map((i) => ({ s: i.str, x: i.transform[4], y: i.transform[5] }))); }
+  return pages;
+}
+async function leerPDFs(files) {
+  if (!files.length) return;
+  sheet(cab("Leyendo PDF…") + `<p class="muted">Un momento, estamos sacando los datos de ${files.length > 1 ? files.length + " archivos" : "la liquidación"}.</p>`);
+  const ok = [], malos = [];
+  for (const f of files) {
+    try { const r = window.parseColanta(await textoPDF(f)); r && r.desde ? ok.push(r) : malos.push(f.name); }
+    catch (e) { malos.push(f.name); }
+  }
+  if (!ok.length) return sheet(cab("No se pudo leer") + `<p>No reconocimos ${malos.length > 1 ? "estos archivos" : "este archivo"} como una liquidación semanal de Colanta.</p><p class="muted small">Si es una foto o un escaneo, todavía no lo podemos leer. Pida el PDF original que envía Colanta.</p>`);
+  ok.sort((a, b) => (a.desde < b.desde ? -1 : 1));
+  const reemplaza = ok.reduce((n, r) => n + r.recibos.filter((x) => S.entregas.some((e) => e.fecha === x.fecha && e.fuente !== "colanta")).length, 0);
+  sheet(cab("Revise antes de guardar") + ok.map((r) => `<div class="panel stack">
+      <h3>Semana ${r.semana ?? ""} · ${fmt(r.desde)} al ${fmt(r.hasta)}</h3>
+      <div class="facts small muted"><div>Litros<b>${nf(r.litros)}</b></div><div>Recogidas<b>${r.recibos.length}</b></div><div>Pagado/L<b>${pesos(r.liquidacion.precioPagado)}</b></div>
+        <div>Neto<b>${pesos(r.liquidacion.neto)}</b></div><div>Semanas de calidad<b>${r.calidad.length}</b></div><div>Células sem. ${r.calidad.length ? r.calidad[r.calidad.length - 1].semana : ""}<b>${r.calidad.length ? nf(r.calidad[r.calidad.length - 1].ccs) : "–"}</b></div></div>
+    </div>`).join("") +
+    (malos.length ? `<p class="small" style="color:var(--bad)">No se pudo leer: ${malos.map(esc).join(", ")}</p>` : "") +
+    (reemplaza ? `<p class="small muted">${reemplaza} entregas que había escrito a mano se reemplazan por lo que midió Colanta.</p>` : "") +
+    `<p class="small muted">No se guardan su nombre, cédula ni correo, solo los datos de la leche.</p>
+    <button class="btn" type="button" id="pGuardar">Guardar ${ok.length > 1 ? ok.length + " semanas" : "liquidación"}</button>`,
+  (s) => ($("#pGuardar", s).onclick = () => guardarYcerrar(async () => {
+    for (const r of ok) await guardarLiquidacion(r);
+    const ult = ok[ok.length - 1], c = cfg();
+    await save("config", { ...c, comprador: c.comprador || "Colanta", precioLitro: ult.liquidacion.precioPagado ? Math.round(ult.liquidacion.precioPagado) : c.precioLitro, nombre: c.nombre || capitalPalabras(ult.predio) });
+    vista = "leche"; setVista("leche");
+  }, ok.length > 1 ? `${ok.length} semanas guardadas` : "Liquidación guardada")));
+}
+const capitalPalabras = (t) => String(t || "").toLowerCase().replace(/(^|\s)\S/g, (m) => m.toUpperCase());
+async function guardarLiquidacion(r) {
+  for (const x of r.recibos) await save("entregas", { id: x.fecha, fecha: x.fecha, am: null, pm: null, litros: x.litros, temp: x.temp, fuente: "colanta", nota: "Recibo Colanta" });
+  for (const q of r.calidad) {
+    const id = `colanta-${q.fecha}`;
+    const viejo = S.calidad.find((c) => c.id === id);
+    if (viejo && q.semana !== r.semana) continue; // semanas anteriores: no pisar lo que ya había
+    await save("calidad", { id, fuente: "colanta", ...q });
+  }
+  const L = r.liquidacion;
+  await save("liquidaciones", { id: `colanta-${r.anio}-${r.semana ?? r.hasta}`, comprador: "Colanta", semana: r.semana, anio: r.anio, desde: r.desde, hasta: r.hasta, fechaLiquidacion: r.fechaLiquidacion, litros: r.litros,
+    precioBase: L.precioBase, ingresoBase: L.ingresoBase, bonificaciones: L.bonificaciones, precioLitro: L.precioLitro, ingresoBruto: L.ingresoBruto, fleteLitro: L.fleteLitro, flete: L.flete,
+    precioPagado: L.precioPagado, ingresoLeche: L.ingresoLeche, deducciones: L.deducciones, totalDeducciones: L.totalDeducciones, neto: L.neto, compras: r.compras });
 }
 
 function vCiclos() {
@@ -398,7 +498,7 @@ const activos = () => S.animales.filter((a) => a.estado !== "vendida");
 function faltanAnimales() { sheet(cab("Primero agregue sus animales") + `<p class="muted">Para este registro necesita tener al menos una res en el hato.</p><button class="btn" type="button" id="xA">Agregar una res</button>`, (s) => ($("#xA", s).onclick = () => formAnimal())); }
 
 function menuRegistrar() {
-  const items = [["entrega", "Leche entregada"], ["obs", "Observación de una vaca"], ["tratamiento", "Tratamiento"], ["nac", "Nacimiento"], ["servicio", "Servicio o inseminación"], ["prenez", "Diagnóstico de preñez"], ["secado", "Secado"], ["vacuna", "Vacuna o desparasitación"], ["calidad", "Análisis de calidad"], ["animal", "Nueva res"]];
+  const items = [["entrega", "Leche entregada"], ["pdf", "Liquidación de Colanta (PDF)"], ["obs", "Observación de una vaca"], ["tratamiento", "Tratamiento"], ["nac", "Nacimiento"], ["servicio", "Servicio o inseminación"], ["prenez", "Diagnóstico de preñez"], ["secado", "Secado"], ["vacuna", "Vacuna o desparasitación"], ["calidad", "Análisis de calidad"], ["animal", "Nueva res"]];
   sheet(cab("¿Qué quiere registrar?") + `<div class="acciones">${items.map(([k, v]) => `<button class="accion" type="button" data-go="${k}"><b>${v}</b></button>`).join("")}</div>`,
     (s) => $$("[data-go]", s).forEach((b) => (b.onclick = () => abrir(b.dataset.go))));
 }
@@ -593,7 +693,8 @@ function exportarExcel() {
   hoja("Hato", [...S.animales].sort(porArete).map((a) => { const c = ciclo(a); return { "Número": a.arete, "Nombre": a.nombre, "Raza": a.raza, "Sexo": a.sexo === "M" ? "Macho" : "Hembra", "Nacimiento": a.nacimiento, "Estado": ESTADOS[a.estado], "Madre": a.madre, "Producción": a.nivel || "", "Partos": c.nPartos, "Último parto": c.ultParto || "", "Preñada": c.prenada ? "Sí" : "No", "Parto probable": c.fpp || "" }; }));
   hoja("Leche", entregasOrden().map((e) => ({ "Fecha": e.fecha, "Mañana (L)": e.am, "Tarde (L)": e.pm, "Total (L)": e.litros, "Nota": e.nota || "" })));
   hoja("Registros", [...S.eventos].sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).map((e) => ({ "Fecha": e.fecha, "Animal": e.arete, "Tipo": e.tipo === "obs" ? "Observación: " + e.obs : TIPOS[e.tipo] || e.tipo, "Producto": e.producto || "", "Retiro hasta": e.retiroHasta || "", "Cría": e.cria || "", "Nota": e.nota || "" })));
-  hoja("Calidad", [...S.calidad].sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).map((q) => ({ "Fecha": q.fecha, "Grasa %": q.grasa, "Proteína %": q.proteina, "Sólidos %": q.solidos, "Células somáticas": q.ccs, "UFC": q.ufc })));
+  hoja("Calidad", [...S.calidad].sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).map((q) => ({ "Fecha": q.fecha, "Semana": q.semana ?? "", "Sólidos %": q.solidos, "Grasa %": q.grasa, "Proteína %": q.proteina, "Células somáticas": q.ccs, "UFC": q.ufc, "MUN mg/dl": q.mun ?? "" })));
+  hoja("Liquidaciones", [...S.liquidaciones].sort((a, b) => (a.hasta < b.hasta ? -1 : 1)).map((l) => ({ "Semana": l.semana, "Desde": l.desde, "Hasta": l.hasta, "Litros": l.litros, "Precio por litro": l.precioLitro, "Flete por litro": l.fleteLitro, "Pagado por litro": l.precioPagado, "Ingreso por leche": l.ingresoLeche, "Deducciones": l.totalDeducciones, "Neto a pagar": l.neto, "Concentrado y sales comprado ($)": ((l.compras || []).find((c) => /CONCENTRADO/i.test(c.grupo)) || {}).valor ?? "" })));
   XLSX.writeFile(wb, `Hato Claro ${cfg().nombre || "finca"} ${hoy()}.xlsx`);
 }
 function backup() {

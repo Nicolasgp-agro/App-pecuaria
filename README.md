@@ -23,5 +23,7 @@ Al publicar una versión nueva hay que cambiar `VERSION` en `sw.js`; así los ce
 | `app.js` | Toda la lógica: datos, alertas, formularios, exportación |
 | `sw.js` | Guarda la app en el celular para usarla sin señal y maneja las actualizaciones |
 | `manifest.webmanifest` | Nombre, ícono y colores para instalarla |
+| `colanta.js` | Lector de la liquidación semanal de Colanta en PDF |
+| `vendor/pdf.min.js`, `vendor/pdf.worker.min.js` | Librería PDF.js 3.11.174 para leer los PDF dentro del celular |
 | `vendor/xlsx.full.min.js` | Librería SheetJS 0.18.5 para crear el Excel |
 | `icons/` | Íconos de la app |

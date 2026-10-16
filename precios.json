@@ -1,0 +1,1025 @@
+{
+ "actualizado": "2026-10-15",
+ "fuente": "Fedegán – Indicadores de precios (Bolsa Mercantil de Colombia y subastas ganaderas)",
+ "url": "https://estadisticas.fedegan.org.co/Indicadores/13",
+ "unidad": "$ por kilo en pie",
+ "gordo": {
+  "titulo": "Ganado gordo (novillo), semanal",
+  "regiones": [
+   "Nacional",
+   "Antioquia",
+   "Valle del Cauca",
+   "Bogotá",
+   "Santander",
+   "Córdoba",
+   "Caquetá",
+   "Caldas",
+   "Atlántico",
+   "Cesar",
+   "Subastas (promedio)"
+  ],
+  "serie": [
+   {
+    "fecha": "2025-10-25",
+    "Nacional": 9552,
+    "Antioquia": 9728,
+    "Valle del Cauca": 9445,
+    "Bogotá": 10200,
+    "Santander": 9845,
+    "Córdoba": 10750,
+    "Caquetá": 8935,
+    "Caldas": 9400,
+    "Atlántico": 9100,
+    "Cesar": 9156,
+    "Subastas (promedio)": 8956
+   },
+   {
+    "fecha": "2025-11-01",
+    "Nacional": 9679,
+    "Antioquia": 9997,
+    "Valle del Cauca": 9857,
+    "Bogotá": 9355,
+    "Santander": 9800,
+    "Córdoba": 9450,
+    "Caquetá": 8935,
+    "Caldas": 9400,
+    "Atlántico": 9100,
+    "Cesar": 9100,
+    "Subastas (promedio)": 8889
+   },
+   {
+    "fecha": "2025-11-08",
+    "Nacional": 9630,
+    "Antioquia": 9827,
+    "Valle del Cauca": 9489,
+    "Bogotá": 10000,
+    "Santander": 9451,
+    "Córdoba": 8589,
+    "Caquetá": 8400,
+    "Caldas": 9850,
+    "Atlántico": 9100,
+    "Cesar": 9100,
+    "Subastas (promedio)": 8955
+   },
+   {
+    "fecha": "2025-11-15",
+    "Nacional": 9658,
+    "Antioquia": 9856,
+    "Valle del Cauca": 9581,
+    "Bogotá": 10425,
+    "Santander": 9853,
+    "Córdoba": 9400,
+    "Caquetá": 8400,
+    "Caldas": 9850,
+    "Atlántico": 9100,
+    "Cesar": 9100,
+    "Subastas (promedio)": 8883
+   },
+   {
+    "fecha": "2025-11-22",
+    "Nacional": 9336,
+    "Antioquia": 9614,
+    "Valle del Cauca": 9418,
+    "Bogotá": 10049,
+    "Santander": 10050,
+    "Córdoba": 9335,
+    "Caquetá": 8883,
+    "Caldas": 9850,
+    "Atlántico": 9500,
+    "Cesar": 9100,
+    "Subastas (promedio)": 8796
+   },
+   {
+    "fecha": "2025-11-29",
+    "Nacional": 9585,
+    "Antioquia": 9687,
+    "Valle del Cauca": 9500,
+    "Bogotá": 9977,
+    "Santander": 10222,
+    "Córdoba": 9400,
+    "Caquetá": 9289,
+    "Caldas": 9550,
+    "Atlántico": 9500,
+    "Cesar": 8900,
+    "Subastas (promedio)": 8866
+   },
+   {
+    "fecha": "2025-12-06",
+    "Nacional": 9619,
+    "Antioquia": 9872,
+    "Valle del Cauca": 9825,
+    "Bogotá": 10300,
+    "Santander": 9176,
+    "Córdoba": 8867,
+    "Caquetá": 9289,
+    "Caldas": 9450,
+    "Atlántico": 9500,
+    "Cesar": 9000,
+    "Subastas (promedio)": 8920
+   },
+   {
+    "fecha": "2025-12-13",
+    "Nacional": 9629,
+    "Antioquia": 9751,
+    "Valle del Cauca": 9822,
+    "Bogotá": 9966,
+    "Santander": 8819,
+    "Córdoba": 8998,
+    "Caquetá": 9500,
+    "Caldas": 9900,
+    "Atlántico": 9500,
+    "Cesar": 10092,
+    "Subastas (promedio)": 8818
+   },
+   {
+    "fecha": "2025-12-20",
+    "Nacional": 9748,
+    "Antioquia": 9339,
+    "Valle del Cauca": 10106,
+    "Bogotá": 10055,
+    "Santander": 8623,
+    "Córdoba": 8936,
+    "Caquetá": 9500,
+    "Caldas": 10300,
+    "Atlántico": 8910,
+    "Cesar": 10092,
+    "Subastas (promedio)": 8440
+   },
+   {
+    "fecha": "2025-12-27",
+    "Nacional": 9174,
+    "Antioquia": 9240,
+    "Valle del Cauca": 9862,
+    "Bogotá": 9707,
+    "Santander": 9109,
+    "Córdoba": 8574,
+    "Caquetá": 9570,
+    "Caldas": 9500,
+    "Atlántico": 9613,
+    "Cesar": 9000,
+    "Subastas (promedio)": 8967
+   },
+   {
+    "fecha": "2026-01-03",
+    "Nacional": 9821,
+    "Antioquia": 10134,
+    "Valle del Cauca": 9707,
+    "Bogotá": 9900,
+    "Santander": 9867,
+    "Córdoba": 8869,
+    "Caquetá": 9570,
+    "Caldas": 9900,
+    "Atlántico": 9613,
+    "Cesar": 9000,
+    "Subastas (promedio)": 8989
+   },
+   {
+    "fecha": "2026-01-10",
+    "Nacional": 9865,
+    "Antioquia": 9876,
+    "Valle del Cauca": 9909,
+    "Bogotá": 10393,
+    "Santander": 10039,
+    "Córdoba": 8869,
+    "Caquetá": 9068,
+    "Caldas": 10038,
+    "Atlántico": 9613,
+    "Cesar": 9000,
+    "Subastas (promedio)": 9245
+   },
+   {
+    "fecha": "2026-01-17",
+    "Nacional": 9781,
+    "Antioquia": 10276,
+    "Valle del Cauca": 9500,
+    "Bogotá": 10643,
+    "Santander": 9514,
+    "Córdoba": 8294,
+    "Caquetá": 9052,
+    "Caldas": 9790,
+    "Atlántico": 9613,
+    "Cesar": 9000,
+    "Subastas (promedio)": 9146
+   },
+   {
+    "fecha": "2026-01-24",
+    "Nacional": 9688,
+    "Antioquia": 10365,
+    "Valle del Cauca": 9635,
+    "Bogotá": 9366,
+    "Santander": 10519,
+    "Córdoba": 9381,
+    "Caquetá": 9500,
+    "Caldas": 9500,
+    "Atlántico": 9613,
+    "Cesar": 9200,
+    "Subastas (promedio)": 9160
+   },
+   {
+    "fecha": "2026-01-31",
+    "Nacional": 9677,
+    "Antioquia": 9906,
+    "Valle del Cauca": 8351,
+    "Bogotá": 10350,
+    "Santander": 10036,
+    "Córdoba": 8478,
+    "Caquetá": 10066,
+    "Caldas": 9600,
+    "Atlántico": 9631,
+    "Cesar": 9500,
+    "Subastas (promedio)": 9153
+   },
+   {
+    "fecha": "2026-02-07",
+    "Nacional": 10063,
+    "Antioquia": 10261,
+    "Valle del Cauca": 9485,
+    "Bogotá": 10114,
+    "Santander": 10081,
+    "Córdoba": 9300,
+    "Caquetá": 10066,
+    "Caldas": 9600,
+    "Atlántico": 8630,
+    "Cesar": 9500,
+    "Subastas (promedio)": 9289
+   },
+   {
+    "fecha": "2026-02-14",
+    "Nacional": 9731,
+    "Antioquia": 10180,
+    "Valle del Cauca": 9532,
+    "Bogotá": 10872,
+    "Santander": 9707,
+    "Córdoba": 9000,
+    "Caquetá": 9000,
+    "Caldas": 9600,
+    "Atlántico": 8630,
+    "Cesar": 9500,
+    "Subastas (promedio)": 9279
+   },
+   {
+    "fecha": "2026-02-21",
+    "Nacional": 9937,
+    "Antioquia": 10196,
+    "Valle del Cauca": 9650,
+    "Bogotá": 10142,
+    "Santander": 9553,
+    "Córdoba": 9566,
+    "Caquetá": 9000,
+    "Caldas": 9600,
+    "Atlántico": 9200,
+    "Cesar": 9500,
+    "Subastas (promedio)": 9116
+   },
+   {
+    "fecha": "2026-02-28",
+    "Nacional": 9903,
+    "Antioquia": 10095,
+    "Valle del Cauca": 9485,
+    "Bogotá": 10337,
+    "Santander": 9491,
+    "Córdoba": 9570,
+    "Caquetá": 9466,
+    "Caldas": 9600,
+    "Atlántico": 10543,
+    "Cesar": 8500,
+    "Subastas (promedio)": 9172
+   },
+   {
+    "fecha": "2026-03-07",
+    "Nacional": 9885,
+    "Antioquia": 10316,
+    "Valle del Cauca": 9975,
+    "Bogotá": 10400,
+    "Santander": 9967,
+    "Córdoba": 9200,
+    "Caquetá": 9718,
+    "Caldas": 9600,
+    "Atlántico": 10543,
+    "Cesar": 8500,
+    "Subastas (promedio)": 9284
+   },
+   {
+    "fecha": "2026-03-14",
+    "Nacional": 10225,
+    "Antioquia": 10400,
+    "Valle del Cauca": 10002,
+    "Bogotá": 9738,
+    "Santander": 10420,
+    "Córdoba": 9499,
+    "Caquetá": 9580,
+    "Caldas": 10100,
+    "Atlántico": 10825,
+    "Cesar": 8500,
+    "Subastas (promedio)": 9344
+   },
+   {
+    "fecha": "2026-03-21",
+    "Nacional": 10341,
+    "Antioquia": 10609,
+    "Valle del Cauca": 10107,
+    "Bogotá": 9655,
+    "Santander": 10300,
+    "Córdoba": 10080,
+    "Caquetá": 9580,
+    "Caldas": 10100,
+    "Atlántico": 10837,
+    "Cesar": 8500,
+    "Subastas (promedio)": 9382
+   },
+   {
+    "fecha": "2026-03-28",
+    "Nacional": 10144,
+    "Antioquia": 10370,
+    "Valle del Cauca": 9998,
+    "Bogotá": 10464,
+    "Santander": 10290,
+    "Córdoba": 10080,
+    "Caquetá": 9564,
+    "Caldas": 10100,
+    "Atlántico": 10496,
+    "Cesar": 8500,
+    "Subastas (promedio)": 9346
+   },
+   {
+    "fecha": "2026-04-02",
+    "Nacional": 10073,
+    "Antioquia": 10310,
+    "Valle del Cauca": 10079,
+    "Bogotá": 11289,
+    "Santander": 10115,
+    "Córdoba": 10080,
+    "Caquetá": 8457,
+    "Caldas": 10100,
+    "Atlántico": 10683,
+    "Cesar": 8900,
+    "Subastas (promedio)": 9481
+   },
+   {
+    "fecha": "2026-04-11",
+    "Nacional": 9878,
+    "Antioquia": 9836,
+    "Valle del Cauca": 10138,
+    "Bogotá": 10357,
+    "Santander": 10700,
+    "Córdoba": 10400,
+    "Caquetá": 9457,
+    "Caldas": 10100,
+    "Atlántico": 10132,
+    "Cesar": 8900,
+    "Subastas (promedio)": 9321
+   },
+   {
+    "fecha": "2026-04-18",
+    "Nacional": 9915,
+    "Antioquia": 10325,
+    "Valle del Cauca": 10300,
+    "Bogotá": 9500,
+    "Santander": 10350,
+    "Córdoba": 9838,
+    "Caquetá": 9457,
+    "Caldas": 10100,
+    "Atlántico": 8891,
+    "Cesar": 8871,
+    "Subastas (promedio)": 9411
+   },
+   {
+    "fecha": "2026-04-25",
+    "Nacional": 9848,
+    "Antioquia": 10068,
+    "Valle del Cauca": 10199,
+    "Bogotá": 10097,
+    "Santander": 10812,
+    "Córdoba": 9484,
+    "Caquetá": 9457,
+    "Caldas": 10100,
+    "Atlántico": 8822,
+    "Cesar": 8871,
+    "Subastas (promedio)": 9266
+   },
+   {
+    "fecha": "2026-05-02",
+    "Nacional": 10006,
+    "Antioquia": 10584,
+    "Valle del Cauca": 9567,
+    "Bogotá": 10302,
+    "Santander": 10687,
+    "Córdoba": 9914,
+    "Caquetá": 9457,
+    "Caldas": 10100,
+    "Atlántico": 9300,
+    "Cesar": 8871,
+    "Subastas (promedio)": 9285
+   },
+   {
+    "fecha": "2026-05-09",
+    "Nacional": 10201,
+    "Antioquia": 10487,
+    "Valle del Cauca": 9183,
+    "Bogotá": 11223,
+    "Santander": 10171,
+    "Córdoba": 10150,
+    "Caquetá": 9000,
+    "Caldas": 10100,
+    "Atlántico": 9300,
+    "Cesar": 8871,
+    "Subastas (promedio)": 9342
+   },
+   {
+    "fecha": "2026-05-16",
+    "Nacional": 10656,
+    "Antioquia": 10557,
+    "Valle del Cauca": 10361,
+    "Bogotá": 11646,
+    "Santander": 10366,
+    "Córdoba": 9900,
+    "Caquetá": 8100,
+    "Caldas": 10100,
+    "Atlántico": 9598,
+    "Cesar": 8680,
+    "Subastas (promedio)": 9386
+   },
+   {
+    "fecha": "2026-05-23",
+    "Nacional": 10768,
+    "Antioquia": 10315,
+    "Valle del Cauca": 10276,
+    "Bogotá": 10750,
+    "Santander": 9832,
+    "Córdoba": 10000,
+    "Caquetá": 8100,
+    "Caldas": 10100,
+    "Atlántico": 9372,
+    "Cesar": 8680,
+    "Subastas (promedio)": 9483
+   },
+   {
+    "fecha": "2026-05-30",
+    "Nacional": 10828,
+    "Antioquia": 10417,
+    "Valle del Cauca": 10350,
+    "Bogotá": 11646,
+    "Santander": 10458,
+    "Córdoba": 10000,
+    "Caquetá": 8100,
+    "Caldas": 10100,
+    "Atlántico": 9372,
+    "Cesar": 8680,
+    "Subastas (promedio)": 9426
+   },
+   {
+    "fecha": "2026-06-06",
+    "Nacional": 10615,
+    "Antioquia": 10648,
+    "Valle del Cauca": 10179,
+    "Bogotá": 11200,
+    "Santander": 10900,
+    "Córdoba": 9746,
+    "Caquetá": 7500,
+    "Caldas": 10100,
+    "Atlántico": 9066,
+    "Cesar": 8680,
+    "Subastas (promedio)": 9563
+   },
+   {
+    "fecha": "2026-06-13",
+    "Nacional": 10524,
+    "Antioquia": 10603,
+    "Valle del Cauca": 10304,
+    "Bogotá": 12122,
+    "Santander": 11000,
+    "Córdoba": 9494,
+    "Caquetá": 7500,
+    "Caldas": 10100,
+    "Atlántico": 9052,
+    "Cesar": 8680,
+    "Subastas (promedio)": 9519
+   },
+   {
+    "fecha": "2026-06-20",
+    "Nacional": 10517,
+    "Antioquia": 10667,
+    "Valle del Cauca": 10223,
+    "Bogotá": 11172,
+    "Santander": 10961,
+    "Córdoba": 9114,
+    "Caquetá": 7500,
+    "Caldas": 10492,
+    "Atlántico": 9771,
+    "Cesar": 8680,
+    "Subastas (promedio)": 9552
+   },
+   {
+    "fecha": "2026-06-27",
+    "Nacional": 10357,
+    "Antioquia": 10783,
+    "Valle del Cauca": 10111,
+    "Bogotá": 11747,
+    "Santander": 10382,
+    "Córdoba": 10141,
+    "Caquetá": 7500,
+    "Caldas": 10200,
+    "Atlántico": 9480,
+    "Cesar": 8680,
+    "Subastas (promedio)": 9565
+   },
+   {
+    "fecha": "2026-07-04",
+    "Nacional": 10197,
+    "Antioquia": 10114,
+    "Valle del Cauca": 10359,
+    "Bogotá": 10714,
+    "Santander": 10100,
+    "Córdoba": 9824,
+    "Caquetá": 7500,
+    "Caldas": 10600,
+    "Atlántico": 9129,
+    "Cesar": 8550,
+    "Subastas (promedio)": 9615
+   },
+   {
+    "fecha": "2026-07-11",
+    "Nacional": 10657,
+    "Antioquia": 10874,
+    "Valle del Cauca": 10329,
+    "Bogotá": 10750,
+    "Santander": 11000,
+    "Córdoba": 9500,
+    "Caquetá": 8041,
+    "Caldas": 10718,
+    "Atlántico": 9448,
+    "Cesar": 8550,
+    "Subastas (promedio)": 9516
+   },
+   {
+    "fecha": "2026-07-18",
+    "Nacional": 10588,
+    "Antioquia": 10622,
+    "Valle del Cauca": 10372,
+    "Bogotá": 9990,
+    "Santander": 11000,
+    "Córdoba": 9500,
+    "Caquetá": 8414,
+    "Caldas": 10400,
+    "Atlántico": 9101,
+    "Cesar": 8300,
+    "Subastas (promedio)": 9412
+   },
+   {
+    "fecha": "2026-07-25",
+    "Nacional": 10586,
+    "Antioquia": 10098,
+    "Valle del Cauca": 10394,
+    "Bogotá": 10571,
+    "Santander": 10586,
+    "Córdoba": 9700,
+    "Caquetá": 8914,
+    "Caldas": 10400,
+    "Atlántico": 8941,
+    "Cesar": 8300,
+    "Subastas (promedio)": 9584
+   },
+   {
+    "fecha": "2026-08-01",
+    "Nacional": 11052,
+    "Antioquia": 10284,
+    "Valle del Cauca": 10086,
+    "Bogotá": 9907,
+    "Santander": 10029,
+    "Córdoba": 9191,
+    "Caquetá": 8914,
+    "Caldas": 10400,
+    "Atlántico": 8786,
+    "Cesar": 8300,
+    "Subastas (promedio)": 9226
+   },
+   {
+    "fecha": "2026-08-08",
+    "Nacional": 10867,
+    "Antioquia": 10701,
+    "Valle del Cauca": 10583,
+    "Bogotá": 9187,
+    "Santander": 10197,
+    "Córdoba": 8708,
+    "Caquetá": 8914,
+    "Caldas": 10500,
+    "Atlántico": 9157,
+    "Cesar": 8300,
+    "Subastas (promedio)": 10015
+   },
+   {
+    "fecha": "2026-08-15",
+    "Nacional": 10926,
+    "Antioquia": 9800,
+    "Valle del Cauca": 10737,
+    "Bogotá": 10550,
+    "Santander": 9700,
+    "Córdoba": 9650,
+    "Caquetá": 8914,
+    "Caldas": 10500,
+    "Atlántico": 9015,
+    "Cesar": 8300,
+    "Subastas (promedio)": 9789
+   },
+   {
+    "fecha": "2026-08-22",
+    "Nacional": 10286,
+    "Antioquia": 9917,
+    "Valle del Cauca": 10141,
+    "Bogotá": 10550,
+    "Santander": 9700,
+    "Córdoba": 8903,
+    "Caquetá": 9200,
+    "Caldas": 10500,
+    "Atlántico": 9007,
+    "Cesar": 8300,
+    "Subastas (promedio)": 9739
+   },
+   {
+    "fecha": "2026-08-29",
+    "Nacional": 10044,
+    "Antioquia": 9858,
+    "Valle del Cauca": 10519,
+    "Bogotá": 10349,
+    "Santander": 9573,
+    "Córdoba": 8903,
+    "Caquetá": 8200,
+    "Caldas": 10500,
+    "Atlántico": 9069,
+    "Cesar": 9399,
+    "Subastas (promedio)": 9755
+   },
+   {
+    "fecha": "2026-09-05",
+    "Nacional": 10602,
+    "Antioquia": 10365,
+    "Valle del Cauca": 10200,
+    "Bogotá": 10950,
+    "Santander": 9200,
+    "Córdoba": 9734,
+    "Caquetá": 8200,
+    "Caldas": 10500,
+    "Atlántico": 8559,
+    "Cesar": 9650,
+    "Subastas (promedio)": 9746
+   },
+   {
+    "fecha": "2026-09-12",
+    "Nacional": 10318,
+    "Antioquia": 10367,
+    "Valle del Cauca": 10132,
+    "Bogotá": 10537,
+    "Santander": 9200,
+    "Córdoba": 10000,
+    "Caquetá": 9100,
+    "Caldas": 10500,
+    "Atlántico": 8862,
+    "Cesar": 9650,
+    "Subastas (promedio)": 9722
+   },
+   {
+    "fecha": "2026-09-19",
+    "Nacional": 10313,
+    "Antioquia": 9984,
+    "Valle del Cauca": 10181,
+    "Bogotá": 10741,
+    "Santander": 9717,
+    "Córdoba": 9454,
+    "Caquetá": 9571,
+    "Caldas": 10500,
+    "Atlántico": 8615,
+    "Cesar": 9650,
+    "Subastas (promedio)": 9662
+   },
+   {
+    "fecha": "2026-09-26",
+    "Nacional": 10287,
+    "Antioquia": 9976,
+    "Valle del Cauca": 10342,
+    "Bogotá": 10737,
+    "Santander": 9655,
+    "Córdoba": 9400,
+    "Caquetá": 9571,
+    "Caldas": 10500,
+    "Atlántico": 8753,
+    "Cesar": 9650,
+    "Subastas (promedio)": 9723
+   },
+   {
+    "fecha": "2026-10-03",
+    "Nacional": 10230,
+    "Antioquia": 10073,
+    "Valle del Cauca": 10334,
+    "Bogotá": 10500,
+    "Santander": 9594,
+    "Córdoba": 9400,
+    "Caquetá": 9571,
+    "Caldas": 10500,
+    "Atlántico": 8670,
+    "Cesar": 9519,
+    "Subastas (promedio)": 9909
+   }
+  ]
+ },
+ "flacoMachos": {
+  "titulo": "Ganado flaco machos (levante), mensual",
+  "regiones": [
+   "Región Caribe",
+   "Magdalena Medio y Santanderes",
+   "Llanos Orientales"
+  ],
+  "serie": [
+   {
+    "periodo": "2025-10",
+    "Región Caribe": 10078,
+    "Magdalena Medio y Santanderes": 10072,
+    "Llanos Orientales": 9643
+   },
+   {
+    "periodo": "2025-11",
+    "Región Caribe": 9572,
+    "Magdalena Medio y Santanderes": 10061,
+    "Llanos Orientales": 9466
+   },
+   {
+    "periodo": "2025-12",
+    "Región Caribe": 9660,
+    "Magdalena Medio y Santanderes": 9726,
+    "Llanos Orientales": 9365
+   },
+   {
+    "periodo": "2026-01",
+    "Región Caribe": 9841,
+    "Magdalena Medio y Santanderes": 10360,
+    "Llanos Orientales": 9924
+   },
+   {
+    "periodo": "2026-02",
+    "Región Caribe": 9998,
+    "Magdalena Medio y Santanderes": 10223,
+    "Llanos Orientales": 10296
+   },
+   {
+    "periodo": "2026-03",
+    "Región Caribe": 10080,
+    "Magdalena Medio y Santanderes": 10153,
+    "Llanos Orientales": 10141
+   },
+   {
+    "periodo": "2026-04",
+    "Región Caribe": 10109,
+    "Magdalena Medio y Santanderes": 10708,
+    "Llanos Orientales": 10485
+   },
+   {
+    "periodo": "2026-05",
+    "Región Caribe": 9884,
+    "Magdalena Medio y Santanderes": 10342,
+    "Llanos Orientales": 10952
+   },
+   {
+    "periodo": "2026-06",
+    "Región Caribe": 9996,
+    "Magdalena Medio y Santanderes": 10491,
+    "Llanos Orientales": 11155
+   },
+   {
+    "periodo": "2026-07",
+    "Región Caribe": 10016,
+    "Magdalena Medio y Santanderes": 10153,
+    "Llanos Orientales": 11105
+   },
+   {
+    "periodo": "2026-08",
+    "Región Caribe": 10490,
+    "Magdalena Medio y Santanderes": 11438,
+    "Llanos Orientales": 12158
+   },
+   {
+    "periodo": "2026-09",
+    "Región Caribe": 10762,
+    "Magdalena Medio y Santanderes": 11069,
+    "Llanos Orientales": 11826
+   }
+  ],
+  "nota": "Desde el 14 de agosto de 2026 es el precio máximo reportado en subastas."
+ },
+ "flacoHembras": {
+  "titulo": "Ganado flaco hembras (levante), mensual",
+  "regiones": [
+   "Región Caribe",
+   "Magdalena Medio y Santanderes",
+   "Llanos Orientales"
+  ],
+  "serie": [
+   {
+    "periodo": "2025-10",
+    "Región Caribe": 8778,
+    "Magdalena Medio y Santanderes": 9355,
+    "Llanos Orientales": 7604
+   },
+   {
+    "periodo": "2025-11",
+    "Región Caribe": 8490,
+    "Magdalena Medio y Santanderes": 9069,
+    "Llanos Orientales": 7818
+   },
+   {
+    "periodo": "2025-12",
+    "Región Caribe": 8372,
+    "Magdalena Medio y Santanderes": 8980,
+    "Llanos Orientales": 7525
+   },
+   {
+    "periodo": "2026-01",
+    "Región Caribe": 8652,
+    "Magdalena Medio y Santanderes": 9385,
+    "Llanos Orientales": 7786
+   },
+   {
+    "periodo": "2026-02",
+    "Región Caribe": 8849,
+    "Magdalena Medio y Santanderes": 9214,
+    "Llanos Orientales": 8002
+   },
+   {
+    "periodo": "2026-03",
+    "Región Caribe": 8862,
+    "Magdalena Medio y Santanderes": 9242,
+    "Llanos Orientales": 7823
+   },
+   {
+    "periodo": "2026-04",
+    "Región Caribe": 8688,
+    "Magdalena Medio y Santanderes": 9393,
+    "Llanos Orientales": 8174
+   },
+   {
+    "periodo": "2026-05",
+    "Región Caribe": 8569,
+    "Magdalena Medio y Santanderes": 9519,
+    "Llanos Orientales": 8571
+   },
+   {
+    "periodo": "2026-06",
+    "Región Caribe": 8716,
+    "Magdalena Medio y Santanderes": 9287,
+    "Llanos Orientales": 8860
+   },
+   {
+    "periodo": "2026-07",
+    "Región Caribe": 8691,
+    "Magdalena Medio y Santanderes": 9302,
+    "Llanos Orientales": 8838
+   },
+   {
+    "periodo": "2026-08",
+    "Región Caribe": 8957,
+    "Magdalena Medio y Santanderes": 10336,
+    "Llanos Orientales": 9537
+   },
+   {
+    "periodo": "2026-09",
+    "Región Caribe": 9205,
+    "Magdalena Medio y Santanderes": 10195,
+    "Llanos Orientales": 9101
+   }
+  ],
+  "nota": "Desde el 14 de agosto de 2026 es el precio máximo reportado en subastas."
+ },
+ "machoCeba": {
+  "titulo": "Macho de ceba, mensual",
+  "regiones": [
+   "Región Caribe",
+   "Magdalena Medio",
+   "Llanos Orientales"
+  ],
+  "serie": [
+   {
+    "periodo": "2025-10",
+    "Región Caribe": 9149,
+    "Magdalena Medio": 9128,
+    "Llanos Orientales": 8641
+   },
+   {
+    "periodo": "2025-11",
+    "Región Caribe": 8941,
+    "Magdalena Medio": 9054,
+    "Llanos Orientales": 8612
+   },
+   {
+    "periodo": "2025-12",
+    "Región Caribe": 9005,
+    "Magdalena Medio": 8961,
+    "Llanos Orientales": 8653
+   },
+   {
+    "periodo": "2026-01",
+    "Región Caribe": 9157,
+    "Magdalena Medio": 9253,
+    "Llanos Orientales": 9033
+   },
+   {
+    "periodo": "2026-02",
+    "Región Caribe": 9295,
+    "Magdalena Medio": 8962,
+    "Llanos Orientales": 9102
+   },
+   {
+    "periodo": "2026-03",
+    "Región Caribe": 9431,
+    "Magdalena Medio": 9115,
+    "Llanos Orientales": 9085
+   },
+   {
+    "periodo": "2026-04",
+    "Región Caribe": 9300,
+    "Magdalena Medio": 9647,
+    "Llanos Orientales": 9431
+   },
+   {
+    "periodo": "2026-05",
+    "Región Caribe": 9221,
+    "Magdalena Medio": 9262,
+    "Llanos Orientales": 9744
+   },
+   {
+    "periodo": "2026-06",
+    "Región Caribe": 9361,
+    "Magdalena Medio": 9237,
+    "Llanos Orientales": 9959
+   },
+   {
+    "periodo": "2026-07",
+    "Región Caribe": 9302,
+    "Magdalena Medio": 9565,
+    "Llanos Orientales": 9973
+   },
+   {
+    "periodo": "2026-08",
+    "Región Caribe": 9298,
+    "Magdalena Medio": 9889,
+    "Llanos Orientales": 10337
+   },
+   {
+    "periodo": "2026-09",
+    "Región Caribe": 9432,
+    "Magdalena Medio": 9830,
+    "Llanos Orientales": 10135
+   }
+  ]
+ },
+ "concentrado": {
+  "titulo": "Concentrado vacas lecheras, bulto de 40 kg, promedio nacional",
+  "serie": [
+   {
+    "periodo": "2025-09",
+    "valor": 71190
+   },
+   {
+    "periodo": "2025-10",
+    "valor": 70857
+   },
+   {
+    "periodo": "2025-11",
+    "valor": 70679
+   },
+   {
+    "periodo": "2025-12",
+    "valor": 70764
+   },
+   {
+    "periodo": "2026-01",
+    "valor": 71642
+   },
+   {
+    "periodo": "2026-02",
+    "valor": 72369
+   },
+   {
+    "periodo": "2026-03",
+    "valor": 72170
+   },
+   {
+    "periodo": "2026-04",
+    "valor": 72281
+   },
+   {
+    "periodo": "2026-05",
+    "valor": 72270
+   },
+   {
+    "periodo": "2026-06",
+    "valor": 72418
+   },
+   {
+    "periodo": "2026-07",
+    "valor": 72298
+   },
+   {
+    "periodo": "2026-08",
+    "valor": 72300
+   }
+  ]
+ }
+}

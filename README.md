@@ -26,4 +26,6 @@ Al publicar una versión nueva hay que cambiar `VERSION` en `sw.js`; así los ce
 | `colanta.js` | Lector de la liquidación semanal de Colanta en PDF |
 | `vendor/pdf.min.js`, `vendor/pdf.worker.min.js` | Librería PDF.js 3.11.174 para leer los PDF dentro del celular |
 | `vendor/xlsx.full.min.js` | Librería SheetJS 0.18.5 para crear el Excel |
+| `precios.json` | Precios de referencia del ganado (Fedegán): gordo semanal por región, levante machos y hembras mensual |
+| `scripts/actualizar_precios.py` | Trae los precios semanales de Fedegán; lo corre GitHub Actions los sábados y lunes antes de publicar |
 | `icons/` | Íconos de la app |

@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.2.1";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "config"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], config: [] };

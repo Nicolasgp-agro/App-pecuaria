@@ -129,7 +129,7 @@ input.big{font-family:var(--f-display);font-size:1.6rem;font-weight:700;text-ali
 /* v2: barra superior, selector de animales, secciones y mapa */
 .iconbtn{width:42px;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:inherit;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
 .iconbtn[aria-pressed="true"]{background:#fff;color:var(--brand)}
-.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--sunk);padding:4px;border-radius:12px}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;background:var(--sunk);padding:4px;border-radius:12px}
 .seg button{font:inherit;font-weight:700;font-size:.92rem;border:0;background:transparent;color:var(--muted);min-height:40px;border-radius:9px;cursor:pointer}
 .seg button[aria-selected="true"]{background:var(--surface);color:var(--brand);box-shadow:0 1px 2px rgba(60,50,30,.12)}
 input[type="search"]{-webkit-appearance:none;appearance:none}

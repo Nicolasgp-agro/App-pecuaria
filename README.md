@@ -1,6 +1,6 @@
 # Hato Claro
 
-App para fincas lecheras: registro del hato, leche entregada, partos, servicios, diagnósticos, secados, tratamientos con retiro de leche, observaciones y calidad de la leche. Funciona sin señal y se instala en el celular como una app (PWA).
+App para fincas de leche y carne: registro del hato, leche entregada, partos, servicios, diagnósticos, secados, tratamientos con retiro de leche, observaciones y calidad de la leche. Funciona sin señal y se instala en el celular como una app (PWA).
 
 ## Cómo se usa
 
@@ -14,10 +14,11 @@ Requisitos una sola vez: repositorio público y **Settings → Pages → Source:
 
 Al publicar una versión nueva hay que cambiar `VERSION` en `sw.js`; así los celulares que ya la tienen instalada reciben el aviso "Hay una versión nueva".
 
-## Qué hace (versión 2.0)
+## Qué hace (versión 2.1)
 
 - **Hato:** fichas, ciclos reproductivos, peso con cinta, valor y candidatas a descarte, buscador.
-- **Leche:** entregas, calidad, lectura del PDF de liquidación de Colanta y simulador de pago por calidad.
+- **Ceba:** pesajes del lote con báscula o cinta, ganancia diaria por animal, fecha estimada de venta y alertas de animales listos o que ganan poco.
+- **Leche:** entregas, calidad, lectura del PDF de liquidación de Colanta (uno o cientos a la vez) y simulador de pago por calidad.
 - **Plata:** gastos, gastos fijos, trabajo familiar, compras de Agrocolanta automáticas, costo y ganancia por litro.
 - **Potreros:** mapa satelital, dibujo tocando o caminando con GPS, rotación, días de descanso y alertas.
 - **Salud:** revisión de síntomas con posibles causas y base de enfermedades de trópico alto (orientativa).

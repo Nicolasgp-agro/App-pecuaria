@@ -59,6 +59,7 @@ function parseColanta(pages) {
   const semana = sem ? Number(sem[1]) : null, anio = sem ? Number(sem[2]) : Number(desde.slice(0, 4));
   const fechaLiq = (() => { const r = row(/FECHA LIQUIDACI/i); if (!r) return null; const i = R.indexOf(r); for (let k = i; k < i + 3 && k < R.length; k++) { const f = fechaCol(R[k].text.split(" a ")[0]); if (f && f !== desde) return f; } return null; })();
   const r0 = row(/^\$?[\d.]+,\d+$/); // precio grande del encabezado
+  const coords = (() => { const i = find(/LATITUD/i); if (i < 0 || !R[i + 1]) return null; const n = R[i + 1].nums.map((x) => x.v).filter((v) => Math.abs(v) <= 180 && !Number.isInteger(v)); return n.length >= 2 ? { lat: n[0], lng: n[1] } : null; })();
   const predio = (() => { const i = find(/NOMBRE DEL PREDIO/i); return i >= 0 && R[i + 1] ? R[i + 1].items[0].s : ""; })();
 
   // Recibo de leche: columnas Lunes..Domingo + TOTAL
@@ -101,7 +102,7 @@ function parseColanta(pages) {
       const r = R[i]; if (!r.label || /OBLIGAT|VOLUNT/i.test(r.label)) continue;
       const c = {}; r.nums.forEach((n) => (c[col(n.x)] = n.v));
       const L = r.label.toUpperCase();
-      if (/^S[OÓ]LIDOS TOTALES/.test(L)) { liq.precioBase = c.valor ?? null; liq.ingresoBase = c.ingreso ?? null; }
+      if (/^S[OÓ]LIDOS TOTALES/.test(L)) { liq.precioBase = c.valor ?? null; liq.ingresoBase = c.ingreso ?? null; liq.stRef = c.ref ?? null; }
       else if (/BONIFICACI/.test(L)) liq.bonificaciones.push({ concepto: r.label, porLitro: c.valor ?? null, total: c.ingreso ?? null });
       else if (/^PRECIO POR LITRO/.test(L)) { liq.precioLitro = c.valor ?? null; liq.ingresoBruto = c.ingreso ?? null; }
       else if (/^FLETES?/.test(L)) { liq.fleteLitro = c.valor ?? c.ref ?? null; liq.flete = c.deduccion ?? null; }
@@ -128,7 +129,7 @@ function parseColanta(pages) {
     }
   }
 
-  return { comprador: "Colanta", semana, anio, desde, hasta, fechaLiquidacion: fechaLiq, predio, recibos, litros: totalLitros, calidad, liquidacion: liq, compras };
+  return { comprador: "Colanta", semana, anio, desde, hasta, fechaLiquidacion: fechaLiq, predio, coords, recibos, litros: totalLitros, calidad, liquidacion: liq, compras };
 }
 
 global.parseColanta = parseColanta;

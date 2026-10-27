@@ -147,3 +147,6 @@ textarea:focus-visible{outline:3px solid var(--milk);outline-offset:2px}
 .kpi b{font-size:clamp(1.3rem,6vw,1.9rem);white-space:nowrap}
 .panel .kpi b{font-size:clamp(1.05rem,4.9vw,1.6rem)}
 .kpi.hero b{font-size:clamp(1.9rem,9vw,2.6rem)}
+
+.chipbtn.mini{padding:4px 0;min-width:34px;text-align:center}
+.tagbtn{font:inherit;background:none;border:0;padding:0;color:inherit;cursor:pointer;display:inline-flex;gap:4px;align-items:center}

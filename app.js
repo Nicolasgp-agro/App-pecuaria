@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.2.0";
+const APP_VERSION = "2.3.0";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -70,6 +70,7 @@ async function encolar(col, id, borrado) {
   programarSync();
 }
 async function save(col, obj, opt = {}) {
+  if (col === "eventos" && !opt.remoto && !obj.por) { const yo = quienSoy(); if (yo) obj = { ...obj, por: yo }; }
   const i = S[col].findIndex((x) => x.id === obj.id);
   i >= 0 ? (S[col][i] = obj) : S[col].push(obj);
   if (!memOnly) await tx(col, "readwrite", (st) => st.put(obj));
@@ -104,8 +105,8 @@ function ciclo(an) {
   let prenada = false, servPren = null;
   if (pren && (!vacia || vacia.fecha < pren.fecha)) {
     prenada = true;
-    const previo = servicios.filter((s) => s.fecha <= pren.fecha).pop();
-    servPren = previo ? previo.fecha : null;
+    if (pren.meses) { const est = add(pren.fecha, -Math.round(pren.meses * 30.4)); const real = servicios.filter((s) => Math.abs(diff(s.fecha, est)) <= 21).pop(); servPren = real ? real.fecha : est; }
+    else { const previo = servicios.filter((s) => s.fecha <= pren.fecha).pop(); servPren = previo ? previo.fecha : null; }
   }
   const fpp = prenada && servPren ? add(servPren, GEST) : null;
   const del_ = ultParto && an.estado === "lactancia" ? diff(hoy(), ultParto) : null;
@@ -265,6 +266,8 @@ function vInicio() {
         <button class="accion" data-q="tratamiento" type="button"><b>Tratamiento</b><span class="small muted">Con días de retiro</span></button>
         <button class="accion" data-q="nac" type="button"><b>Nacimiento</b><span class="small muted">Parto y cría</span></button>
         <button class="accion" data-q="servicio" type="button"><b>Servicio</b><span class="small muted">Monta o inseminación</span></button>
+        <button class="accion" data-q="palpacion" type="button"><b>Palpación</b><span class="small muted">Cargadas y vacías</span></button>
+        <button class="accion" data-q="buscar" type="button"><b>Hoja de vida</b><span class="small muted">Buscar una vaca</span></button>
         <button class="accion" data-q="sintomas" type="button"><b>Animal enfermo</b><span class="small muted">Revisar síntomas</span></button>
         ${puedeVerPlata() ? `<button class="accion" data-q="gasto" type="button"><b>Gasto</b><span class="small muted">Compras y pagos</span></button>` : `<button class="accion" data-q="mover" type="button"><b>Mover ganado</b><span class="small muted">Cambio de potrero</span></button>`}
       </div>
@@ -279,23 +282,24 @@ function abrir(q, arete) {
   ({ entrega: () => formEntrega(), obs: () => formObs(arete), tratamiento: () => formEvento("tratamiento", arete), nac: () => formNacimiento(arete),
      servicio: () => formEvento("servicio", arete), prenez: () => formEvento("prenez", arete), evento: () => formEvento("celo", arete),
      animal: () => formAnimal(), calidad: () => formCalidad(), pdf: () => pedirPDF(), secado: () => formEvento("secado", arete), vacuna: () => formEvento("vacuna", arete),
-     gasto: () => formGasto(), sintomas: () => formSintomas(arete), mover: () => moverGanado(), potrero: () => formPotrero(), voz: () => abrirVoz() })[q]();
+     gasto: () => formGasto(), sintomas: () => formSintomas(arete), mover: () => moverGanado(), potrero: () => formPotrero(), voz: () => abrirVoz(), palpacion: () => formPalpacion(), buscar: () => formBuscar() })[q]();
 }
 
 function vHato() {
   const el = $("#v-hato");
-  const SUBS = [["animales", "Animales"], ["ciclos", "Ciclos"], ["carne", "Ceba"], ["salud", "Salud"]];
+  const SUBS = [["animales", "Animales"], ["ciclos", "Ciclos"], ["carne", "Ceba"], ["salud", "Salud"], ["registros", "Registros"]];
   el.innerHTML = `<div class="seg" role="tablist">${SUBS.map(([k, v]) => `<button type="button" role="tab" data-sub="${k}" aria-selected="${subHato === k}">${v}</button>`).join("")}</div><div id="hCont" class="vista"></div>`;
   $$("[data-sub]", el).forEach((b) => (b.onclick = () => { subHato = b.dataset.sub; vHato(); }));
   const cont = $("#hCont", el);
   if (subHato === "ciclos") return vCiclos(cont);
   if (subHato === "salud") return vSalud(cont);
   if (subHato === "carne") return vCarne(cont);
+  if (subHato === "registros") return vRegistros(cont);
   const filtros = [["", "Todos"], ["lactancia", "En ordeño"], ["seca", "Secas"], ["novilla", "Novillas"], ["ternera", "Terneras/os"], ["ceba", "Ceba"], ["toro", "Toros"], ["vendida", "Vendidas"]];
   cont.innerHTML = `
     <div class="row spread"><div><h2>Hato · ${S.animales.filter((a) => a.estado !== "vendida").length} animales</h2>${S.animales.some(esCarne) ? `<span class="small muted">${S.animales.filter((a) => a.estado !== "vendida" && !esCarne(a)).length} de leche · ${S.animales.filter(esCarne).length} de ceba</span>` : ""}</div><button class="btn sm" id="hNuevo" type="button">+ Nueva res</button></div>
     ${S.animales.length && puedeVerPlata() ? panelMercado() : ""}
-    <input type="search" id="hBusca" placeholder="Buscar por número o nombre" value="${esc(buscaHato)}" autocomplete="off" aria-label="Buscar animal">
+    <div class="row" style="gap:8px;flex-wrap:nowrap"><input type="search" id="hBusca" placeholder="Buscar por número o nombre" value="${esc(buscaHato)}" autocomplete="off" aria-label="Buscar animal" style="flex:1">${window.SpeechRecognition || window.webkitSpeechRecognition ? `<button class="btn ghost" type="button" id="hMic" aria-label="Buscar hablando" style="flex:none">🎙</button>` : ""}</div>
     <div class="chips">${filtros.map(([k, v]) => `<button class="chipbtn" type="button" data-f="${k}" aria-pressed="${filtroHato === k}">${v}</button>`).join("")}</div>
     <div class="lista" id="hLista"></div>`;
   const pintarLista = () => {
@@ -318,6 +322,7 @@ function vHato() {
   };
   pintarLista();
   $("#hBusca", cont).oninput = (e) => { buscaHato = e.target.value; pintarLista(); };
+  const hm = $("#hMic", cont); if (hm) hm.onclick = () => escuchar(hm, (txt) => { const ar = buscarAnimalDicho(txt); if (ar) return hojaVida(ar); buscaHato = txt.replace(/\D+/g, " ").trim().split(" ")[0] || txt; $("#hBusca", cont).value = buscaHato; pintarLista(); });
   $("#hNuevo", cont).onclick = () => formAnimal();
   const hp = $("#hPrecios", cont); if (hp) hp.onclick = formPrecios;
   $$("[data-f]", cont).forEach((b) => (b.onclick = () => { filtroHato = b.dataset.f; vHato(); }));
@@ -491,6 +496,7 @@ function vCiclos(el) {
   const prox = proximos(30);
   const ev = [...S.eventos].sort((a, b) => (a.fecha < b.fecha ? 1 : -1)).slice(0, 15);
   el.innerHTML = `
+    <div class="row" style="gap:8px"><button class="btn" type="button" id="cPalpa" style="flex:1">Palpación</button><button class="btn ghost" type="button" id="cRegs" style="flex:1">Ver registros</button></div>
     <div class="panel stack"><h2>Próximos 30 días</h2>
       ${prox.length ? `<div class="tablewrap"><table><tr><th>Fecha</th><th>Qué</th><th>Animal</th></tr>${prox.map((p) => `<tr><td>${fmt(p.f)}<br><span class="small muted">${diff(p.f, hoy()) === 0 ? "hoy" : "en " + diff(p.f, hoy()) + " días"}</span></td><td>${esc(p.t)}</td><td><span class="tag">${esc(p.an.arete)}</span> ${esc(p.an.nombre || "")}</td></tr>`).join("")}</table></div>` : `<p class="muted">Nada programado en el próximo mes.</p>`}
     </div>
@@ -501,6 +507,8 @@ function vCiclos(el) {
     <div class="panel stack"><h2>Últimos registros</h2>
       <div class="timeline">${ev.length ? ev.map((e) => `<div><span class="small muted">${fmt(e.fecha)}</span><br><b>${esc(e.tipo === "obs" ? e.obs : TIPOS[e.tipo] || e.tipo)}</b> · <span class="tag">${esc(e.arete)}</span>${e.cria ? ` → cría <span class="tag">${esc(e.cria)}</span>` : ""}${e.producto ? " · " + esc(e.producto) : ""}${e.nota ? ` <span class="muted">— ${esc(e.nota)}</span>` : ""}</div>`).join("") : `<div class="muted">Sin registros todavía.</div>`}</div>
     </div>`;
+  $("#cPalpa", el).onclick = formPalpacion;
+  $("#cRegs", el).onclick = () => { subHato = "registros"; vHato(); };
 }
 
 function vMas() {
@@ -584,7 +592,7 @@ const activos = () => S.animales.filter((a) => a.estado !== "vendida");
 function faltanAnimales() { sheet(cab("Primero agregue sus animales") + `<p class="muted">Para este registro necesita tener al menos una res en el hato.</p><button class="btn" type="button" id="xA">Agregar una res</button>`, (s) => ($("#xA", s).onclick = () => formAnimal())); }
 
 function menuRegistrar() {
-  const items = [["voz", "🎙 Registrar hablando"], ["entrega", "Leche entregada"], ...(puedeVerPlata() ? [["pdf", "Liquidación de Colanta (PDF)"], ["gasto", "Gasto"]] : []), ["sintomas", "Revisar síntomas"], ["mover", "Mover ganado de potrero"], ["obs", "Observación de una vaca"], ["tratamiento", "Tratamiento"], ["nac", "Nacimiento"], ["servicio", "Servicio o inseminación"], ["prenez", "Diagnóstico de preñez"], ["secado", "Secado"], ["vacuna", "Vacuna o desparasitación"], ["calidad", "Análisis de calidad"], ["animal", "Nueva res"]];
+  const items = [["voz", "🎙 Registrar hablando"], ["entrega", "Leche entregada"], ...(puedeVerPlata() ? [["pdf", "Liquidación de Colanta (PDF)"], ["gasto", "Gasto"]] : []), ["sintomas", "Revisar síntomas"], ["mover", "Mover ganado de potrero"], ["palpacion", "Palpación (varias vacas)"], ["buscar", "Hoja de vida de una vaca"], ["obs", "Observación de una vaca"], ["tratamiento", "Tratamiento"], ["nac", "Nacimiento"], ["servicio", "Servicio o inseminación"], ["prenez", "Diagnóstico de preñez"], ["secado", "Secado"], ["vacuna", "Vacuna o desparasitación"], ["calidad", "Análisis de calidad"], ["animal", "Nueva res"]];
   sheet(cab("¿Qué quiere registrar?") + `<div class="acciones">${items.map(([k, v]) => `<button class="accion" type="button" data-go="${k}"><b>${v}</b></button>`).join("")}</div>`,
     (s) => $$("[data-go]", s).forEach((b) => (b.onclick = () => abrir(b.dataset.go))));
 }
@@ -683,7 +691,7 @@ function formNacimiento(madre, pre = {}) {
 function formEvento(tipo, arete, pre = {}) {
   if (!activos().length) return faltanAnimales();
   const esTrat = tipo === "tratamiento", multi = ["tratamiento", "vacuna"].includes(tipo);
-  const titulo = { tratamiento: "Tratamiento", servicio: "Monta o inseminación", prenez: "Diagnóstico de preñez", secado: "Secado", vacuna: "Vacuna o desparasitación", celo: "Celo observado" }[tipo] || "Registro";
+  const titulo = { tratamiento: "Tratamiento", servicio: "Monta o inseminación", prenez: "Palpación o diagnóstico", secado: "Secado", vacuna: "Vacuna o desparasitación", celo: "Celo observado" }[tipo] || "Registro";
   const lista = tipo === "secado" ? S.animales.filter((a) => a.estado === "lactancia") : ["servicio", "prenez", "celo"].includes(tipo) ? hembras() : activos();
   if (!lista.length) return sheet(cab(titulo) + `<p class="muted">No hay animales para este registro.</p>`);
   const selA = selectorAnimales(lista, { multi, atajos: tipo === "vacuna", sel: pre.animales || (arete ? [arete] : []) });
@@ -692,7 +700,7 @@ function formEvento(tipo, arete, pre = {}) {
       <div><span class="small muted" style="font-weight:700">${multi ? "Animales (puede elegir varios)" : "Animal"}</span>${selA.html}</div>
       <div class="grid2">
       <label class="f">Fecha<input type="date" id="eF" value="${hoy()}" required></label>
-      ${tipo === "prenez" ? `<div class="full"><span class="f" style="font-size:.88rem;color:var(--muted);font-weight:700">Resultado</span><div class="opciones" style="margin-top:6px"><button type="button" class="chipbtn" data-r="prenez" aria-pressed="${pre.resultado !== "vacia"}">Preñada</button><button type="button" class="chipbtn" data-r="vacia" aria-pressed="${pre.resultado === "vacia"}">Vacía</button></div></div>` : ""}
+      ${tipo === "prenez" ? `<div class="full"><span class="f" style="font-size:.88rem;color:var(--muted);font-weight:700">Resultado</span><div class="opciones" style="margin-top:6px"><button type="button" class="chipbtn" data-r="prenez" aria-pressed="${pre.resultado !== "vacia"}">Preñada</button><button type="button" class="chipbtn" data-r="vacia" aria-pressed="${pre.resultado === "vacia"}">Vacía</button></div></div><label class="f" id="lMeses">Meses de preñez (si lo sabe)<input id="eMeses" inputmode="numeric" value="${pre.meses || ""}" placeholder="Ej. 2"></label>` : ""}
       ${tipo === "servicio" ? `<div class="full"><span class="f" style="font-size:.88rem;color:var(--muted);font-weight:700">Cómo fue</span><div class="opciones" style="margin-top:6px"><button type="button" class="chipbtn" data-m="monta" aria-pressed="${pre.metodo !== "ia"}">Monta con toro</button><button type="button" class="chipbtn" data-m="ia" aria-pressed="${pre.metodo === "ia"}">Inseminación</button></div></div>
         <label class="f full" id="lToro">Toro<select id="eToro">${toros().map((t) => `<option value="${esc(t.arete)}"${pre.toro === t.arete ? " selected" : ""}>${esc(t.arete)}${t.nombre ? " · " + esc(t.nombre) : ""}</option>`).join("")}<option value=""${toros().length && !pre.toro ? "" : " selected"}>Otro toro (escribir)</option></select></label>
         <label class="f full" id="lPaj"><span id="lPajT">Pajilla</span><input id="eP" value="${esc(pre.nota || "")}" placeholder="Ej. Pajilla Holstein"></label>` : ""}
@@ -708,7 +716,8 @@ function formEvento(tipo, arete, pre = {}) {
     $$("[data-m]", s).forEach((b) => (b.onclick = () => { metodo = b.dataset.m; $$("[data-m]", s).forEach((x) => x.setAttribute("aria-pressed", x === b)); verMetodo(); }));
     if (tipo === "servicio") { $("#eToro", s).onchange = verMetodo; verMetodo(); }
     let res = pre.resultado === "vacia" ? "vacia" : "prenez";
-    $$("[data-r]", s).forEach((b) => (b.onclick = () => { res = b.dataset.r; $$("[data-r]", s).forEach((x) => x.setAttribute("aria-pressed", x === b)); }));
+    const lm = $("#lMeses", s); if (lm) lm.hidden = res !== "prenez";
+    $$("[data-r]", s).forEach((b) => (b.onclick = () => { res = b.dataset.r; $$("[data-r]", s).forEach((x) => x.setAttribute("aria-pressed", x === b)); if (lm) lm.hidden = res !== "prenez"; }));
     const prodIn = $("#eP", s), retIn = $("#eR", s);
     if (prodIn && retIn) prodIn.addEventListener("input", () => { const p = cfgProd().lista[prodKey(prodIn.value)]; if (p && p.retiroDias != null && !retIn.value) retIn.value = p.retiroDias; });
     $("#fE", s).onsubmit = (ev) => { ev.preventDefault();
@@ -721,6 +730,7 @@ function formEvento(tipo, arete, pre = {}) {
         for (const ar of aretes) {
           const a = S.animales.find((x) => x.arete === ar);
           const o = { id: uid(), arete: ar, tipo: t, fecha, nota };
+          if (t === "prenez") { const m = pint($("#eMeses", s).value); if (m) o.meses = m; }
           if (tipo === "servicio") { o.metodo = metodo; const tr = metodo === "monta" && toros().length ? $("#eToro", s).value : ""; if (tr) o.toro = tr; else if (producto) o.nota = [producto, nota].filter(Boolean).join(" · "); }
           else if (producto) o.producto = producto;
           if (esTrat && r != null) { o.retiroDias = r; o.retiroHasta = add(fecha, r); }
@@ -781,7 +791,7 @@ function detalle(arete) {
   const hembraAdulta = an.sexo !== "M" && !["ternera"].includes(an.estado);
   const plata = puedeVerPlata(); const w = pesoAnimal(an), v = plata ? valorAnimal(an) : null, dsc = plata ? evalDescarte(an) : null;
   sheet(`<div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h2>${esc(an.nombre || "Sin nombre")}</h2></div><button class="btn ghost sm" data-close type="button">Cerrar</button></div>
-    <div>${chips(an, c)}</div>
+    <div class="row spread"><div>${chips(an, c)}</div><button class="btn ghost sm" type="button" data-x="hv">📋 Hoja de vida</button></div>
     ${r ? `<div class="alerta bad"><span class="quien">Leche en retiro</span><span>No entregar hasta el ${fmt(r.retiroHasta)} inclusive${r.producto ? " · " + esc(r.producto) : ""}.</span></div>` : ""}
     <div class="facts small muted"><div>Raza<b>${esc(an.raza || "–")}</b></div><div>Edad<b>${edadTxt(an.nacimiento)}</b></div><div>Madre<b>${esc(an.madre || "–")}</b></div>
       <div>Partos<b>${c.nPartos}</b></div><div>Días parida<b>${c.del ?? "–"}</b></div><div>Parto prob.<b>${fmt(c.fpp)}</b></div>
@@ -799,7 +809,7 @@ function detalle(arete) {
       <button class="accion" type="button" data-x="peso"><b>Registrar peso</b></button>
       <button class="accion" type="button" data-x="sintomas"><b>Revisar síntomas</b></button>
     </div>
-    <div><span class="eyebrow">Historial</span><div class="timeline" style="margin-top:8px">${ev.length ? ev.map((e) => `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(e.tipo === "obs" ? e.obs : e.tipo === "parto" ? `${ordParto.get(e.id)}.º parto` : e.tipo === "servicio" ? nombreServicio(e) : TIPOS[e.tipo] || e.tipo)}</b>${e.cria ? ` (cría ${esc(e.cria)})` : ""}${e.producto ? " · " + esc(e.producto) : ""}${e.retiroHasta ? ` · retiro hasta ${fmt(e.retiroHasta)}` : ""}${e.kg ? ` · ${nf(e.kg)} kg` : ""}${e.valor ? ` · ${pesos(e.valor)}` : ""}${e.tipo === "salud" && e.posibles ? `<br><span class="small">Posibles: ${esc(e.posibles.slice(0, 3).join(", ") || "sin coincidencias")}</span>` : ""}${e.nota ? `<br><span class="small muted">${esc(e.nota)}</span>` : ""}</div>`).join("") : '<div class="muted">Sin registros.</div>'}</div></div>
+    <div><span class="eyebrow">Historial</span><div class="timeline" style="margin-top:8px">${ev.length ? ev.map((e) => `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(etiquetaEvento(e))}</b>${e.cria ? ` (cría ${esc(e.cria)})` : ""}${e.producto ? " · " + esc(e.producto) : ""}${e.retiroHasta ? ` · retiro hasta ${fmt(e.retiroHasta)}` : ""}${e.kg ? ` · ${nf(e.kg)} kg` : ""}${e.valor && plata ? ` · ${pesos(e.valor)}` : ""}${e.tipo === "salud" && e.posibles ? `<br><span class="small">Posibles: ${esc(e.posibles.slice(0, 3).join(", ") || "sin coincidencias")}</span>` : ""}${e.nota || e.por || e.quien ? `<br><span class="small muted">${esc([e.quien ? "palpó " + e.quien : "", e.nota || "", e.por ? "por " + e.por.split("@")[0] : ""].filter(Boolean).join(" · "))}</span>` : ""}</div>`).join("") : '<div class="muted">Sin registros.</div>'}</div></div>
     <div class="row"><button class="btn ghost sm" type="button" data-x="editar">Editar datos</button>${plata ? `<button class="btn ghost sm" type="button" data-x="vender">${an.estado === "vendida" ? "Ya vendida" : "Vender"}</button><button class="btn ghost sm" type="button" data-x="borrar">Eliminar</button>` : ""}</div>`,
   (s) => {
     $$("[data-n]", s).forEach((b) => (b.onclick = async () => { await save("animales", { ...an, nivel: b.dataset.n }); toast("Producción actualizada"); render(); detalle(arete); }));
@@ -809,6 +819,7 @@ function detalle(arete) {
       else if (x === "vender") { if (an.estado !== "vendida") formVenta(an); }
       else if (x === "peso") formPeso(an);
       else if (x === "sintomas") formSintomas(arete);
+      else if (x === "hv") hojaVida(arete);
       else if (x === "borrar") confirmar(this, "Toque otra vez para eliminar", () => guardarYcerrar(() => del("animales", an.id), "Res eliminada"));
       else abrir(x, arete);
     }));
@@ -1346,8 +1357,16 @@ function parseVoz(texto) {
       const tr = an.find((x) => toros().some((t) => t.arete === x)); const metodo = /(insemin|pajilla)/.test(f) ? "ia" : /(mont|cubri|toro)/.test(f) ? "monta" : null;
       acciones.push({ tipo: "servicio", animales: an.filter((x) => x !== tr), toro: tr || null, metodo, nota: capital(despuesDe(f, "con|pajilla|toro") ? (/pajilla/.test(f) ? "Pajilla " : /toro/.test(f) ? "Toro " : "") + despuesDe(f, "con|pajilla|toro") : "") }); continue;
     }
-    if (/(prenad|carga|cargada)/.test(f) && !/no esta prenad/.test(f)) { acciones.push({ tipo: "prenez", animales: an }); continue; }
-    if (/(vacia|no esta prenad|no quedo)/.test(f)) { acciones.push({ tipo: "vacia", animales: an }); continue; }
+    if (/(prenad|cargad|\bcarga\b|vacia|no quedo|palp)/.test(f)) {
+      const VAC = /(vacia|no quedo|no esta (?:prenad|cargad))/, PRE = /(prenad|cargad|\bcarga\b|quedo)/;
+      const pos = an.map((ar) => { const a = S.animales.find((x) => x.arete === ar); let i = f.search(new RegExp("(^|\\D)" + ar + "(\\D|$)")); if (i < 0 && a && a.nombre) i = f.indexOf(sinTildes(a.nombre.toLowerCase())); return { ar, i: Math.max(0, i) }; }).sort((x, y) => x.i - y.i);
+      const res = pos.map((p, k) => { const tr = f.slice(p.i, k + 1 < pos.length ? pos[k + 1].i : undefined); return { ar: p.ar, r: VAC.test(tr) ? "vacia" : PRE.test(tr) ? "prenez" : null, meses: +((/(\d+)\s*mes/.exec(tr) || [])[1]) || null }; });
+      for (let k = res.length - 2; k >= 0; k--) if (!res[k].r && res[k + 1].r) { res[k].r = res[k + 1].r; res[k].meses = res[k].meses || res[k + 1].meses; }
+      for (let k = 1; k < res.length; k++) if (!res[k].r) res[k].r = res[k - 1].r;
+      if (!res.length) acciones.push({ tipo: VAC.test(f) ? "vacia" : "prenez", animales: [], dudoso: !VAC.test(f) && !PRE.test(f) });
+      res.forEach((x) => acciones.push({ tipo: x.r || "prenez", animales: [x.ar], meses: x.r === "prenez" ? x.meses : null, dudoso: !x.r }));
+      continue;
+    }
     if (/\bcelo\b|caliente de celo|esta alborotada/.test(f)) { acciones.push({ tipo: "celo", animales: an }); continue; }
     if (/(secamos|secar|la seque|secada|se seco)/.test(f)) { acciones.push({ tipo: "secado", animales: an }); continue; }
     if (/(centimetros|cm\b|pecho|cinta)/.test(f)) { const cm = (/(\d+(?:[.,]\d+)?)\s*(?:centimetros|cm)/.exec(f) || [])[1]; if (cm) { acciones.push({ tipo: "peso", animales: an, cm: pn(cm) }); continue; } }
@@ -1358,13 +1377,14 @@ function parseVoz(texto) {
   }
   return acciones;
 }
-const NOMBRE_ACCION = { entrega: "Leche entregada", tratamiento: "Tratamiento", vacuna: "Vacuna o purga", parto: "Parto", servicio: "Servicio", prenez: "Preñez confirmada", vacia: "Diagnóstico: vacía", celo: "Celo", secado: "Secado", peso: "Peso", obs: "Observación", gasto: "Gasto", nada: "No entendí" };
+const NOMBRE_ACCION = { entrega: "Leche entregada", tratamiento: "Tratamiento", vacuna: "Vacuna o purga", parto: "Parto", servicio: "Monta o inseminación", prenez: "Palpación: cargada", vacia: "Palpación: vacía", celo: "Celo", secado: "Secado", peso: "Peso", obs: "Observación", gasto: "Gasto", nada: "No entendí" };
 function accionCompleta(a) {
   if (a.tipo === "nada") return false;
   if (a.tipo === "entrega") return a.litros > 0;
   if (a.tipo === "gasto") return a.valor > 0;
   if (a.tipo === "parto") return a.animales.length === 1 && a.cria && a.sexo;
   if (a.tipo === "tratamiento") return a.animales.length > 0 && a.retiroDias != null;
+  if (a.dudoso) return false;
   return a.animales && a.animales.length > 0;
 }
 function resumenAccion(a) {
@@ -1375,6 +1395,7 @@ function resumenAccion(a) {
     case "tratamiento": return `${quien} · ${a.producto || "producto sin nombre"} · ${a.retiroDias != null ? a.retiroDias + " días de retiro" : "¿días de retiro?"}${a.causa ? " · " + a.causa : ""}`;
     case "vacuna": return `${quien} · ${a.producto}`;
     case "parto": return `${quien} · ${a.sexo === "M" ? "macho" : a.sexo === "H" ? "hembra" : "¿macho o hembra?"} · ${a.cria ? "cría " + a.cria : "¿número de la cría?"}`;
+    case "prenez": return a.dudoso ? `${quien} · ¿cargada o vacía?` : `${quien}${a.meses ? " · " + mesesTxt(a.meses) : ""}`;
     case "servicio": return `${quien} · ${a.metodo === "ia" ? "inseminación" : a.metodo === "monta" ? "monta" : "servicio"}${a.toro ? " con el toro " + a.toro : ""}${a.nota && !a.toro ? " · " + a.nota : ""}`;
     case "peso": return `${quien} · ${a.kg ? nf(a.kg) + " kg" : nf(a.cm) + " cm de pecho (≈ " + nf(pesoCinta(a.cm)) + " kg)"}`;
     case "obs": return `${quien} · ${a.obs}`;
@@ -1403,7 +1424,7 @@ async function ejecutarAccion(a) {
     else if (a.tipo === "obs") await save("eventos", { id: uid(), arete: ar, tipo: "obs", obs: a.obs, fecha: f, nota: "por voz" });
     else if (a.tipo === "peso") { const kg = a.kg || pesoCinta(a.cm); await save("animales", { ...an, peso: kg, pesoFecha: f, pesoMetodo: a.kg ? "bascula" : "cinta" }); await save("eventos", { id: uid(), arete: ar, tipo: "peso", fecha: f, kg, nota: a.cm ? `Cinta: ${nf(a.cm)} cm` : "" }); }
     else if (a.tipo === "servicio") await save("eventos", { id: uid(), arete: ar, tipo: "servicio", fecha: f, metodo: a.metodo || "monta", ...(a.toro ? { toro: a.toro } : {}), nota: (a.toro ? "" : a.nota) || "por voz" });
-    else { await save("eventos", { id: uid(), arete: ar, tipo: a.tipo, fecha: f, nota: a.nota || "por voz" }); if (a.tipo === "secado") await save("animales", { ...an, estado: "seca" }); }
+    else { await save("eventos", { id: uid(), arete: ar, tipo: a.tipo, fecha: f, nota: a.nota || "por voz", ...(a.tipo === "prenez" && a.meses ? { meses: a.meses } : {}) }); if (a.tipo === "secado") await save("animales", { ...an, estado: "seca" }); }
   }
   if (a.tipo === "tratamiento") await recordarProducto(a.producto, "tratamiento", a.retiroDias);
   if (a.tipo === "vacuna") await recordarProducto(a.producto, "vacuna", null);
@@ -1415,14 +1436,14 @@ function completarAccion(a) {
   if (a.tipo === "parto") return formNacimiento(ar, { sexo: a.sexo, cria: a.cria });
   if (a.tipo === "obs") return formObs(ar, a.obs);
   if (a.tipo === "peso") { const an = S.animales.find((x) => x.arete === ar); return an ? formPeso(an) : toast("Diga el número del animal"); }
-  if (["tratamiento", "vacuna", "servicio", "prenez", "vacia", "celo", "secado"].includes(a.tipo)) return formEvento(a.tipo === "vacia" ? "prenez" : a.tipo, ar, { animales: a.animales, producto: a.producto, retiroDias: a.retiroDias, nota: a.causa || a.nota, metodo: a.metodo, toro: a.toro, resultado: a.tipo === "vacia" ? "vacia" : null });
+  if (["tratamiento", "vacuna", "servicio", "prenez", "vacia", "celo", "secado"].includes(a.tipo)) return formEvento(a.tipo === "vacia" ? "prenez" : a.tipo, ar, { animales: a.animales, producto: a.producto, retiroDias: a.retiroDias, nota: a.causa || a.nota, metodo: a.metodo, toro: a.toro, meses: a.meses, resultado: a.tipo === "vacia" ? "vacia" : null });
   abrirVoz();
 }
 let reconocedor = null;
 function abrirVoz() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   sheet(cab("Registrar hablando") + `
-    <p class="small muted">Ejemplos: <i>"La 104 recibió antibiótico intramamario, 4 días de retiro"</i> · <i>"Entregamos 430 litros"</i> · <i>"Vacunamos todas contra aftosa"</i> · <i>"La 105 está en celo"</i> · <i>"Compré 10 bultos de concentrado por 720 mil"</i> · <i>"Abrir la 104"</i></p>
+    <p class="small muted">Ejemplos: <i>"La 104 recibió antibiótico intramamario, 4 días de retiro"</i> · <i>"Entregamos 430 litros"</i> · <i>"Vacunamos todas contra aftosa"</i> · <i>"La 105 está en celo"</i> · <i>"Compré 10 bultos de concentrado por 720 mil"</i> · <i>"Hoja de vida de la 104"</i> · <i>"La 104 cargada de dos meses, la 105 vacía"</i></p>
     ${SR ? `<button class="btn block" type="button" id="vMic">🎙 Tocar y hablar</button>` : `<p class="small">Este celular no permite el dictado dentro de la app. Use el micrófono del teclado en la caja de abajo.</p>`}
     <label class="f">Lo que dijo (puede corregirlo)<textarea id="vTxt" rows="3" style="font:inherit;font-size:16px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:11px 12px;width:100%" placeholder="Hable o escriba aquí"></textarea></label>
     <button class="btn ghost block" type="button" id="vOk">Entender</button>
@@ -1430,8 +1451,8 @@ function abrirVoz() {
     const txt = $("#vTxt", s), mic = $("#vMic", s);
     const entender = () => {
       if (!txt.value.trim()) return;
-      const pide = txt.value.trim().toLowerCase().replace(/[.,¿?¡!]/g, " ").replace(/\s+/g, " ").trim().match(/^(?:(?:abr[aei]r?|ver|vea|mostrar|muestr[ae](?:me)?|buscar?|busque|informaci[oó]n de|datos de|c[oó]mo (?:est[aá]|va))\s+)?(?:(?:a\s+)?(?:la|el|de la|del)\s+)?(?:vaca|animal|novillo|novilla|toro|terner[oa]|res|n[uú]mero|chapeta)?\s*(?:n[uú]mero\s+)?(\d{1,6})$/);
-      if (pide && S.animales.some((x) => x.arete === pide[1])) { detalle(pide[1]); return; }
+      const pide = buscarAnimalDicho(txt.value);
+      if (pide) { hojaVida(pide); return; }
       const acc = parseVoz(txt.value || "").map((a) => (a.tipo === "gasto" && !puedeVerPlata() ? { tipo: "nada", texto: "Los gastos los registra el dueño" } : a));
       $("#vRes", s).innerHTML = acc.map((a, i) => `<div class="panel stack"><div class="row spread"><b>${NOMBRE_ACCION[a.tipo]}</b>${a.tipo === "nada" ? "" : accionCompleta(a) ? '<span class="chip pren">Listo</span>' : '<span class="chip seca">Falta un dato</span>'}</div><span class="small">${esc(resumenAccion(a))}</span>
         ${a.tipo === "nada" ? `<span class="small muted">Intente decirlo de otra forma o use el botón +.</span>` : `<div class="row">${accionCompleta(a) ? `<button class="btn sm" type="button" data-ok="${i}">Guardar</button>` : ""}<button class="btn ghost sm" type="button" data-ed="${i}">${accionCompleta(a) ? "Corregir" : "Completar"}</button></div>`}</div>`).join("") +
@@ -2004,7 +2025,7 @@ async function verMiembros() {
 /* ---------- carne: pesajes, ganancia diaria de peso y ceba ---------- */
 const cfgCarne = () => ({ pesoObjetivo: 450, gdpMin: 300, ...(S.config.find((c) => c.id === "carne") || {}), id: "carne" });
 const toros = () => S.animales.filter((a) => a.sexo === "M" && a.estado === "toro").sort(porArete);
-const nombreServicio = (e) => { const t = e.toro && S.animales.find((a) => a.arete === e.toro); return e.metodo === "monta" ? `Monta${e.toro ? " · toro " + e.toro + (t && t.nombre ? " " + t.nombre : "") : ""}` : e.metodo === "ia" ? "Inseminación" : "Servicio"; };
+const nombreServicio = (e) => { const t = e.toro && S.animales.find((a) => a.arete === e.toro); const m = e.metodo || (/pajilla|insemin/i.test(e.nota || "") ? "ia" : /toro/i.test(e.nota || "") ? "monta" : null); if (!e.metodo && m) return m === "ia" ? "Inseminación" : "Monta"; return e.metodo === "monta" ? `Monta${e.toro ? " · toro " + e.toro + (t && t.nombre ? " " + t.nombre : "") : ""}` : e.metodo === "ia" ? "Inseminación" : "Servicio"; };
 const esCarne = (a) => a.estado !== "vendida" && (a.estado === "ceba" || a.proposito === "carne" || (a.sexo === "M" && a.estado !== "toro"));
 function pesajes(arete) {
   const ev = S.eventos.filter((e) => e.arete === arete && e.tipo === "peso" && e.kg).map((e) => ({ fecha: e.fecha, kg: e.kg }));
@@ -2107,6 +2128,235 @@ function formPesajeLote() {
   });
 }
 
+/* ---------- palpación, hoja de vida y registros ---------- */
+const quienSoy = () => { try { return sesion && sesion.email ? sesion.email : null; } catch (e) { return null; } };
+const mesesTxt = (m) => { if (m == null) return ""; if (m < 1) return "menos de 1 mes"; const f = Math.floor(m), medio = m - f >= 0.5; return `${f} ${f === 1 ? "mes" : "meses"}${medio ? " y medio" : ""}`; };
+function ordinalParto(e) {
+  const an = S.animales.find((a) => a.arete === e.arete);
+  return evDe(e.arete).filter((x) => x.tipo === "parto").findIndex((x) => x.id === e.id) + 1 + ((an && an.partosPrevios) || 0);
+}
+function etiquetaEvento(e) {
+  if (e.tipo === "obs") return e.obs || "Observación";
+  if (e.tipo === "parto") return `${ordinalParto(e)}.º parto`;
+  if (e.tipo === "servicio") return nombreServicio(e);
+  if (e.tipo === "prenez") return `Palpación: cargada${e.meses ? " de " + mesesTxt(e.meses) : ""}`;
+  if (e.tipo === "vacia") return "Palpación: vacía";
+  return TIPOS[e.tipo] || e.tipo;
+}
+function detalleEv(e) {
+  return [e.cria ? "cría " + e.cria : "", e.producto || "", e.retiroHasta ? "retiro hasta " + fmt(e.retiroHasta) : "", e.kg ? nf(e.kg) + " kg" : "",
+    e.tipo === "salud" && e.posibles ? "posibles: " + (e.posibles.slice(0, 3).join(", ") || "sin coincidencias") : "",
+    e.quien ? "palpó " + e.quien : "", e.nota || "", e.por ? "por " + e.por.split("@")[0] : ""].filter(Boolean).join(" · ");
+}
+function padreDe(an) {
+  if (!an.madre || !an.nacimiento) return null;
+  const sv = S.eventos.filter((e) => e.arete === an.madre && e.tipo === "servicio" && diff(an.nacimiento, e.fecha) >= 255 && diff(an.nacimiento, e.fecha) <= 300).sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).pop();
+  if (!sv) return null;
+  if (sv.toro) { const t = S.animales.find((a) => a.arete === sv.toro); return `Toro ${sv.toro}${t && t.nombre ? " " + t.nombre : ""}`; }
+  return sv.metodo === "ia" ? `Inseminación${sv.nota ? " · " + sv.nota : ""}` : sv.nota || null;
+}
+function estadoRepro(an, c) {
+  if (an.sexo === "M" || ["ternera", "vendida"].includes(an.estado)) return null;
+  const h = hoy();
+  if (c.prenada) return `Cargada${c.servPren ? " de " + mesesTxt(diff(h, c.servPren) / 30.4) : ""}`;
+  const dx = S.eventos.filter((e) => e.arete === an.arete && e.tipo === "vacia" && (!c.ultParto || e.fecha >= c.ultParto)).sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).pop();
+  if (dx && (!c.ultServ || dx.fecha >= c.ultServ.fecha)) return `Vacía (palpada el ${fmt(dx.fecha)})`;
+  if (c.ultServ && (!c.ultParto || c.ultServ.fecha > c.ultParto)) return `Servida hace ${diff(h, c.ultServ.fecha)} días, sin palpar`;
+  return "Sin servicio";
+}
+function buscarAnimalDicho(texto) {
+  let t = palabrasANumeros(sinTildes(String(texto).toLowerCase())).replace(/[.,;:¿?¡!]/g, " ").replace(/\s+/g, " ").trim();
+  const cmd = /^(?:abr\w*|ver|vea|mostrar|muestr\w*|buscar?|busque|ensen\w*|informacion|datos|hoja de vida|historia|historial|ficha|como (?:esta|va)|de|del|la|el|a|vaca|animal|novillo|novilla|toro|ternero|ternera|res|numero|chapeta|me|por favor)\s+/;
+  let prev; do { prev = t; t = t.replace(cmd, ""); } while (t !== prev);
+  t = t.replace(/\s+por favor$/, "").trim();
+  if (/^\d{1,6}$/.test(t)) return S.animales.some((a) => a.arete === t) ? t : null;
+  const a = S.animales.find((x) => x.nombre && sinTildes(x.nombre.toLowerCase()) === t);
+  return a ? a.arete : null;
+}
+function escuchar(btn, alTerminar, opt = {}) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return toast("Este celular no permite dictar aquí. Use el micrófono del teclado.");
+  if (reconocedor && opt.continuo) { try { reconocedor.stop(); } catch (e) {} return; }
+  try { if (reconocedor) reconocedor.abort(); } catch (e) {}
+  const r = new SR(); reconocedor = r; r.lang = "es-CO"; r.interimResults = false; r.continuous = !!opt.continuo;
+  const txt0 = btn.textContent; btn.textContent = opt.continuo ? "⏹ Escuchando… toque para terminar" : "Escuchando… hable ahora"; if (!opt.continuo) btn.disabled = true;
+  let final = "";
+  r.onresult = (ev) => { for (let i = ev.resultIndex; i < ev.results.length; i++) if (ev.results[i].isFinal) { final += ev.results[i][0].transcript + " "; if (opt.continuo) { alTerminar(ev.results[i][0].transcript); } } };
+  r.onerror = (ev) => toast(ev.error === "not-allowed" ? "Permita el micrófono para hablarle a la app" : ev.error === "network" ? "El dictado necesita señal. Use el micrófono del teclado." : ev.error === "no-speech" ? "No se escuchó nada" : "No se escuchó bien, intente otra vez");
+  r.onend = () => { btn.textContent = txt0; btn.disabled = false; reconocedor = null; if (!opt.continuo && final.trim()) alTerminar(final.trim()); };
+  try { r.start(); } catch (e) { btn.textContent = txt0; btn.disabled = false; reconocedor = null; }
+}
+
+/* hoja de vida */
+function hojaVida(arete) {
+  const an = S.animales.find((a) => a.arete === arete); if (!an) return toast("No encontré el animal " + arete);
+  const c = ciclo(an), ev = evDe(arete), h = hoy(), hembra = an.sexo !== "M";
+  const partos = ev.filter((e) => e.tipo === "parto");
+  const repro = ev.filter((e) => ["servicio", "prenez", "vacia", "celo", "secado"].includes(e.tipo)).reverse();
+  const salud = ev.filter((e) => ["tratamiento", "vacuna", "salud", "obs"].includes(e.tipo)).reverse();
+  const pesosEv = ev.filter((e) => e.tipo === "peso").reverse();
+  const crias = S.animales.filter((a) => a.madre === arete).sort(porArete);
+  const hermanos = an.madre ? S.animales.filter((a) => a.madre === an.madre && a.arete !== arete).sort(porArete) : [];
+  const madre = an.madre && S.animales.find((a) => a.arete === an.madre), padre = padreDe(an), est = estadoRepro(an, c);
+  const intervalo = partos.length >= 2 ? Math.round(avg(partos.slice(1).map((p, i) => diff(p.fecha, partos[i].fecha)))) : null;
+  const w = pesoAnimal(an), r = retiro(arete);
+  const tag = (x) => `<button type="button" class="tagbtn" data-hv="${esc(x.arete)}"><span class="tag">${esc(x.arete)}</span> ${esc(x.nombre || "")}</button>`;
+  const linea = (e) => { const d = detalleEv(e); return `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(etiquetaEvento(e))}</b>${d ? `<br><span class="small muted">${esc(d)}</span>` : ""}</div>`; };
+  const seccion = (titulo, lista, max = 12) => lista.length ? `<div class="panel stack"><span class="eyebrow">${titulo}</span><div class="timeline">${lista.slice(0, max).map(linea).join("")}</div>${lista.length > max ? `<span class="small muted">y ${lista.length - max} registros más antiguos</span>` : ""}</div>` : "";
+  sheet(`<div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h2>${esc(an.nombre || "Sin nombre")}</h2></div><button class="btn ghost sm" data-close type="button">Cerrar</button></div>
+    <span class="eyebrow">Hoja de vida</span>
+    <div>${chips(an, c)}</div>
+    ${r ? `<div class="alerta bad"><span class="quien">Leche en retiro</span><span>No entregar hasta el ${fmt(r.retiroHasta)} inclusive${r.producto ? " · " + esc(r.producto) : ""}.</span></div>` : ""}
+    <div class="facts small muted">
+      <div>Raza<b>${esc(an.raza || "–")}</b></div><div>Sexo<b>${hembra ? "Hembra" : "Macho"}</b></div><div>Edad<b>${edadTxt(an.nacimiento)}</b></div>
+      <div>Nació<b>${an.nacimiento ? fmt(an.nacimiento) : "–"}</b></div><div>Origen<b>${an.origen === "comprada" ? "Comprada" : "De la finca"}</b></div><div>Peso<b>${nf(w.kg)} kg${w.aprox ? " aprox." : ""}</b></div>
+      <div>Madre<b>${madre ? tag(madre) : esc(an.madre || "–")}</b></div><div style="grid-column:span 2">Padre<b>${esc(padre || "–")}</b></div>
+    </div>
+    ${est ? `<div class="panel stack"><span class="eyebrow">Reproducción</span>
+      <div class="facts small muted"><div>Estado<b>${esc(est)}</b></div><div>Partos<b>${c.nPartos}</b></div><div>Último parto<b>${c.ultParto ? fmt(c.ultParto) : "–"}</b></div>
+        <div>Parto probable<b>${c.fpp ? fmt(c.fpp) : "–"}</b></div><div>Días abiertos<b>${c.dAbiertos ?? "–"}</b></div><div>Entre partos<b>${intervalo ? intervalo + " días" : "–"}</b></div></div>
+      ${partos.length ? `<div class="timeline">${[...partos].reverse().map((p) => { const cr = p.cria && S.animales.find((a) => a.arete === p.cria); return `<div><span class="small muted">${fmt(p.fecha)}</span> · <b>${ordinalParto(p)}.º parto</b>${p.cria ? ` · cría ${cr ? tag(cr) : esc(p.cria)}${cr ? " " + (cr.sexo === "M" ? "macho" : "hembra") : ""}` : ""}</div>`; }).join("")}</div>` : ""}
+      ${an.partosPrevios ? `<span class="small muted">${an.partosPrevios} partos antes de usar la app.</span>` : ""}
+    </div>` : ""}
+    ${seccion("Servicios y palpaciones", repro)}
+    ${seccion("Salud, tratamientos y vacunas", salud)}
+    ${seccion("Pesajes", pesosEv, 6)}
+    ${crias.length ? `<div class="panel stack"><span class="eyebrow">Crías · ${crias.length}</span><div class="opciones">${crias.map(tag).join("")}</div></div>` : ""}
+    ${hermanos.length ? `<div class="panel stack"><span class="eyebrow">Hermanos de madre · ${hermanos.length}</span><div class="opciones">${hermanos.map(tag).join("")}</div></div>` : ""}
+    <div class="row"><button class="btn" type="button" id="hvCompartir">Enviar por WhatsApp</button><button class="btn ghost" type="button" id="hvFicha">Registrar algo</button></div>`,
+  (s) => {
+    $$("[data-hv]", s).forEach((b) => (b.onclick = () => hojaVida(b.dataset.hv)));
+    $("#hvFicha", s).onclick = () => detalle(arete);
+    $("#hvCompartir", s).onclick = () => {
+      const L = [`*Hoja de vida · ${an.arete}${an.nombre ? " " + an.nombre : ""}*`, `${an.raza || "Raza sin dato"} · ${hembra ? "Hembra" : "Macho"} · ${edadTxt(an.nacimiento)} · ${ESTADOS[an.estado] || an.estado}`];
+      if (an.madre || padre) L.push(`Madre: ${an.madre || "–"} · Padre: ${padre || "–"}`);
+      if (est) { L.push(`Partos: ${c.nPartos}${c.ultParto ? " · último " + fmt(c.ultParto) : ""}`); L.push(`Estado: ${est}${c.fpp ? " · parto probable " + fmt(c.fpp) : ""}`); }
+      if (r) L.push(`Leche en retiro hasta ${fmt(r.retiroHasta)}`);
+      if (repro.length) { L.push("", "Servicios y palpaciones:"); repro.slice(0, 6).forEach((e) => L.push(`- ${fmt(e.fecha)}: ${etiquetaEvento(e)}`)); }
+      if (salud.length) { L.push("", "Salud:"); salud.slice(0, 6).forEach((e) => { const d = detalleEv(e); L.push(`- ${fmt(e.fecha)}: ${etiquetaEvento(e)}${d ? " (" + d + ")" : ""}`); }); }
+      L.push("", "Enviado desde Hato Claro");
+      const texto = L.join("\n");
+      if (navigator.share) navigator.share({ title: "Hoja de vida " + an.arete, text: texto }).catch(() => {});
+      else window.open("https://wa.me/?text=" + encodeURIComponent(texto), "_blank");
+    };
+  });
+}
+function formBuscar() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  sheet(cab("Hoja de vida") + `<p class="small muted">Diga o escriba el número o el nombre del animal.</p>
+    ${SR ? `<button class="btn block" type="button" id="bMic">🎙 Tocar y decir el número</button>` : ""}
+    <input type="search" id="bTxt" placeholder="Número o nombre" autocomplete="off" aria-label="Buscar animal">
+    <div id="bRes" class="lista"></div>`, (s) => {
+    const pintar = (t0) => {
+      const t = sinTildes(String(t0).toLowerCase().trim());
+      const l = t ? S.animales.filter((a) => sinTildes(a.arete.toLowerCase()).includes(t) || sinTildes((a.nombre || "").toLowerCase()).includes(t)).sort(porArete).slice(0, 20) : [];
+      $("#bRes", s).innerHTML = l.map((a) => `<button class="card" type="button" data-a="${esc(a.arete)}"><div class="row" style="gap:8px"><span class="tag">${esc(a.arete)}</span><h3>${esc(a.nombre || "Sin nombre")}</h3></div><div>${chips(a, ciclo(a))}</div></button>`).join("") || (t ? `<p class="muted">No hay ningún animal con "${esc(t0)}".</p>` : "");
+      $$("#bRes [data-a]", s).forEach((b) => (b.onclick = () => hojaVida(b.dataset.a)));
+    };
+    $("#bTxt", s).oninput = (e) => pintar(e.target.value);
+    const mic = $("#bMic", s);
+    if (mic) mic.onclick = () => escuchar(mic, (txt) => { const ar = buscarAnimalDicho(txt); if (ar) return hojaVida(ar); const t = txt.replace(/\D+/g, " ").trim().split(" ")[0] || txt; $("#bTxt", s).value = t; pintar(t); });
+    setTimeout(() => { if (!SR) $("#bTxt", s).focus(); }, 50);
+  });
+}
+
+/* palpación por lotes */
+function porPalpar() {
+  const h = hoy();
+  return hembras().map((an) => {
+    const c = ciclo(an), est = estadoRepro(an, c);
+    const ds = c.ultServ && (!c.ultParto || c.ultServ.fecha > c.ultParto) ? diff(h, c.ultServ.fecha) : null;
+    let prio = 3;
+    if (c.prenada) prio = 4;
+    else if (ds != null && /sin palpar/.test(est)) prio = ds >= 35 ? 1 : 2;
+    const motivo = c.prenada ? `${est}${c.fpp ? " · pare " + fmt(c.fpp) : ""}` : ds != null && /sin palpar/.test(est) ? `Servida hace ${ds} días${c.ultServ.toro ? " · toro " + c.ultServ.toro : c.ultServ.metodo === "ia" ? " · inseminada" : ""}${ds < 35 ? " (aún es pronto)" : ""}` : est + (c.ultParto && !c.prenada ? ` · ${diff(h, c.ultParto)} días de parida` : "");
+    return { an, c, prio, motivo };
+  }).sort((a, b) => a.prio - b.prio || porArete(a.an, b.an));
+}
+const conteoPalpa = (c, v) => [c ? `${c} ${c === 1 ? "cargada" : "cargadas"}` : "", v ? `${v} ${v === 1 ? "vacía" : "vacías"}` : ""].filter(Boolean).join(", ");
+function formPalpacion() {
+  const lista = porPalpar();
+  if (!lista.length) return sheet(cab("Palpación") + `<p class="muted">No hay vacas ni novillas en el hato.</p>`);
+  const res = {}; let todas = !lista.some((x) => x.prio === 1), filtro = "";
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const pend = lista.filter((x) => x.prio === 1).length;
+  sheet(cab("Palpación") + `
+    <p class="small muted">${pend ? `<b>${pend} ${pend === 1 ? "vaca pendiente" : "vacas pendientes"}</b> por palpar (servidas hace 35 días o más). ` : ""}Toque Cargada o Vacía en cada una, o díctelo: <i>"la 104 cargada de dos meses, la 105 vacía"</i>.</p>
+    <div class="grid2"><label class="f">Fecha<input type="date" id="pFecha" value="${hoy()}" max="${hoy()}"></label><label class="f">Quién palpó (opcional)<input id="pQuien" placeholder="Ej. Dr. Pérez" autocomplete="off"></label></div>
+    ${SR ? `<button class="btn ghost block" type="button" id="pVoz">🎙 Dictar resultados</button>` : ""}
+    <div class="row" style="gap:8px"><input type="search" id="pBusca" placeholder="Buscar vaca" style="flex:1" autocomplete="off" aria-label="Buscar vaca"><button class="chipbtn" type="button" id="pTodas" aria-pressed="${todas}">Todas</button></div>
+    <div id="pLista" class="stack"></div>
+    <div style="position:sticky;bottom:-1px;background:var(--surface);padding:10px 0 4px"><button class="btn block" type="button" id="pGuardar" disabled>Marque las vacas palpadas</button></div>`, (s) => {
+    const pintar = () => {
+      const t = sinTildes(filtro.toLowerCase().trim());
+      const vis = lista.filter((x) => (t ? sinTildes(x.an.arete.toLowerCase()).includes(t) || sinTildes((x.an.nombre || "").toLowerCase()).includes(t) : todas || x.prio <= 2 || res[x.an.arete]));
+      $("#pLista", s).innerHTML = vis.length ? vis.map(({ an, motivo, prio }) => { const r = res[an.arete] || {}; return `<div class="panel" style="padding:10px 12px;gap:8px;${r.r ? "border-color:var(--brand)" : ""}" data-pa="${esc(an.arete)}">
+        <div class="row spread" style="gap:8px;align-items:flex-start"><div><span class="tag">${esc(an.arete)}</span> <b>${esc(an.nombre || "")}</b><br><span class="small" style="color:var(${prio === 1 ? "--fg" : "--muted"})">${esc(motivo)}</span></div>
+          <div class="row" style="gap:6px;flex-wrap:nowrap"><button type="button" class="chipbtn" data-pr="prenez" aria-pressed="${r.r === "prenez"}">Cargada</button><button type="button" class="chipbtn" data-pr="vacia" aria-pressed="${r.r === "vacia"}">Vacía</button></div></div>
+        ${r.r === "prenez" ? `<div class="opciones" style="align-items:center"><span class="small muted">Meses:</span>${[1, 2, 3, 4, 5, 6, 7, 8].map((m) => `<button type="button" class="chipbtn mini" data-pm="${m}" aria-pressed="${r.meses === m}">${m}</button>`).join("")}</div>` : ""}
+      </div>`; }).join("") : `<div class="empty">${t ? "Ninguna vaca coincide." : "No hay vacas pendientes por palpar. Toque <b>Todas</b> para ver el hato completo."}</div>`;
+      const n = Object.keys(res).length, nc = Object.values(res).filter((x) => x.r === "prenez").length;
+      const g = $("#pGuardar", s); g.disabled = !n; g.textContent = n ? `Guardar ${n} ${n === 1 ? "palpación" : "palpaciones"} · ${conteoPalpa(nc, n - nc)}` : "Marque las vacas palpadas";
+    };
+    $("#pLista", s).onclick = (ev) => {
+      const fila = ev.target.closest("[data-pa]"); if (!fila) return; const ar = fila.dataset.pa;
+      const br = ev.target.closest("[data-pr]"), bm = ev.target.closest("[data-pm]");
+      if (br) { const cur = res[ar]; if (cur && cur.r === br.dataset.pr) delete res[ar]; else res[ar] = { r: br.dataset.pr, meses: cur && br.dataset.pr === "prenez" ? cur.meses : null }; pintar(); }
+      else if (bm && res[ar]) { const m = Number(bm.dataset.pm); res[ar].meses = res[ar].meses === m ? null : m; pintar(); }
+    };
+    $("#pBusca", s).oninput = (e) => { filtro = e.target.value; pintar(); };
+    $("#pTodas", s).onclick = (e) => { todas = !todas; e.currentTarget.setAttribute("aria-pressed", todas); pintar(); };
+    const voz = $("#pVoz", s);
+    if (voz) voz.onclick = () => escuchar(voz, (txt) => {
+      const acc = parseVoz(txt).filter((a) => (a.tipo === "prenez" || a.tipo === "vacia") && !a.dudoso);
+      let n = 0; acc.forEach((a) => a.animales.forEach((ar) => { if (lista.some((x) => x.an.arete === ar)) { res[ar] = { r: a.tipo, meses: a.tipo === "prenez" ? a.meses || null : null }; n++; } }));
+      toast(n ? `${n} ${n === 1 ? "vaca marcada" : "vacas marcadas"}` : `No entendí: "${txt}"`); pintar();
+    }, { continuo: true });
+    $("#pGuardar", s).onclick = () => {
+      const fecha = $("#pFecha", s).value || hoy(), quien = $("#pQuien", s).value.trim();
+      const items = Object.entries(res), nc = items.filter(([, x]) => x.r === "prenez").length;
+      guardarYcerrar(async () => { for (const [ar, x] of items) await save("eventos", { id: uid(), arete: ar, tipo: x.r, fecha, nota: "", ...(x.meses ? { meses: x.meses } : {}), ...(quien ? { quien } : {}) }); },
+        `${items.length} ${items.length === 1 ? "palpación guardada" : "palpaciones guardadas"}: ${conteoPalpa(nc, items.length - nc)}`);
+    };
+    pintar();
+  });
+}
+
+/* registros: todo lo que se ha hecho */
+let filtroReg = "", buscaReg = "", diasReg = 30;
+const grupoEv = (t) => (["servicio", "prenez", "vacia", "celo", "parto", "secado"].includes(t) ? "repro" : ["tratamiento", "vacuna", "salud", "obs"].includes(t) ? "salud" : "otros");
+function vRegistros(el) {
+  const GR = [["", "Todos"], ["repro", "Reproducción"], ["salud", "Salud"], ["otros", "Pesos y otros"]];
+  const PER = [[7, "7 días"], [30, "30 días"], [90, "3 meses"], [0, "Todo"]];
+  el.innerHTML = `
+    <div class="row spread"><h2>Registros</h2><button class="btn sm" type="button" id="rPalpa">Palpación</button></div>
+    <input type="search" id="rBusca" placeholder="Buscar por número o nombre" value="${esc(buscaReg)}" autocomplete="off" aria-label="Buscar registros de un animal">
+    <div class="chips">${GR.map(([k, v]) => `<button class="chipbtn" type="button" data-rg="${k}" aria-pressed="${filtroReg === k}">${v}</button>`).join("")}</div>
+    <div class="chips">${PER.map(([k, v]) => `<button class="chipbtn" type="button" data-rp="${k}" aria-pressed="${diasReg === k}">${v}</button>`).join("")}</div>
+    <div id="rLista" class="stack"></div>`;
+  const pintar = () => {
+    const desde = diasReg ? add(hoy(), -diasReg) : "0000", t = sinTildes(buscaReg.trim().toLowerCase());
+    const nom = new Map(S.animales.map((a) => [a.arete, a]));
+    const evs = S.eventos.filter((e) => e.fecha >= desde && (!filtroReg || grupoEv(e.tipo) === filtroReg) && (!t || sinTildes(String(e.arete).toLowerCase()).includes(t) || sinTildes(((nom.get(e.arete) || {}).nombre || "").toLowerCase()).includes(t)))
+      .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
+    const est = new Map(), estado = (ar) => { if (!est.has(ar)) { const a = nom.get(ar); est.set(ar, a ? chips(a, ciclo(a)) : '<span class="chip">Ya no está</span>'); } return est.get(ar); };
+    const MAX = 200, dias = []; let ult = null;
+    evs.slice(0, MAX).forEach((e) => { if (e.fecha !== ult) { dias.push({ f: e.fecha, l: [] }); ult = e.fecha; } dias[dias.length - 1].l.push(e); });
+    const titulo = (f) => { const d = diff(hoy(), f); return d === 0 ? "Hoy" : d === 1 ? "Ayer" : fmt(f); };
+    $("#rLista", el).innerHTML = `<span class="small muted">${evs.length} ${evs.length === 1 ? "registro" : "registros"}${diasReg ? " en los últimos " + PER.find((p) => p[0] === diasReg)[1] : ""}${evs.length > MAX ? ` · se muestran los ${MAX} más recientes` : ""}</span>` +
+      (dias.length ? dias.map((g) => `<div class="stack" style="gap:6px"><span class="eyebrow">${titulo(g.f)}</span>${g.l.map((e) => { const a = nom.get(e.arete), d = detalleEv(e); return `<button class="card" type="button" data-a="${esc(e.arete)}" style="gap:4px;padding:10px 12px">
+        <div class="row spread" style="gap:8px"><div class="row" style="gap:8px"><span class="tag">${esc(e.arete)}</span><b>${esc((a && a.nombre) || "")}</b></div><span class="small muted">${fmt(e.fecha)}</span></div>
+        <div><b>${esc(etiquetaEvento(e))}</b>${d ? ` <span class="small muted">· ${esc(d)}</span>` : ""}</div>
+        <div class="small">${estado(e.arete)}</div></button>`; }).join("")}</div>`).join("")
+        : `<div class="empty">No hay registros${t ? " de ese animal" : ""} en este periodo.</div>`);
+    $$("#rLista [data-a]", el).forEach((b) => (b.onclick = () => hojaVida(b.dataset.a)));
+  };
+  $("#rBusca", el).oninput = (e) => { buscaReg = e.target.value; pintar(); };
+  $$("[data-rg]", el).forEach((b) => (b.onclick = () => { filtroReg = b.dataset.rg; vRegistros(el); }));
+  $$("[data-rp]", el).forEach((b) => (b.onclick = () => { diasReg = Number(b.dataset.rp); vRegistros(el); }));
+  $("#rPalpa", el).onclick = formPalpacion;
+  pintar();
+}
 /* ---------- exportar y copias ---------- */
 function descargar(nombre, blob) {
   const url = URL.createObjectURL(blob); const a = document.createElement("a");

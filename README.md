@@ -14,9 +14,12 @@ Requisitos una sola vez: repositorio público y **Settings → Pages → Source:
 
 Al publicar una versión nueva hay que cambiar `VERSION` en `sw.js`; así los celulares que ya la tienen instalada reciben el aviso "Hay una versión nueva".
 
-## Qué hace (versión 2.1)
+## Qué hace (versión 2.3)
 
 - **Hato:** fichas, ciclos reproductivos, peso con cinta, valor y candidatas a descarte, buscador.
+- **Palpación:** jornada de palpación vaca por vaca (cargada con meses o vacía), también dictada; los meses calculan el parto probable.
+- **Hoja de vida** de cada animal: padres, partos, servicios, palpaciones, salud, pesos y crías; se abre diciendo el número y se envía por WhatsApp.
+- **Registros:** todo lo que se ha registrado, por fecha, con la vaca, qué se hizo, su estado y quién lo registró.
 - **Ceba:** pesajes del lote con báscula o cinta, ganancia diaria por animal, fecha estimada de venta y alertas de animales listos o que ganan poco.
 - **Leche:** entregas, calidad, lectura del PDF de liquidación de Colanta (uno o cientos a la vez) y simulador de pago por calidad.
 - **Plata:** gastos, gastos fijos, trabajo familiar, compras de Agrocolanta automáticas, costo y ganancia por litro.

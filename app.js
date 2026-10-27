@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.1.0";
+const APP_VERSION = "2.1.1";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -110,7 +110,7 @@ function ciclo(an) {
   const fpp = prenada && servPren ? add(servPren, GEST) : null;
   const del_ = ultParto && an.estado === "lactancia" ? diff(hoy(), ultParto) : null;
   const dAbiertos = ultParto ? (prenada && servPren ? diff(servPren, ultParto) : diff(hoy(), ultParto)) : null;
-  return { ultParto, ultServ, prenada, servPren, fpp, del: del_, dAbiertos, nPartos: partos.length, nServ: servicios.length };
+  return { ultParto, ultServ, prenada, servPren, fpp, del: del_, dAbiertos, nPartos: partos.length + (an.partosPrevios || 0), nServ: servicios.length };
 }
 function retiro(arete) {
   const h = hoy();
@@ -628,11 +628,13 @@ function formAnimal(an) {
       <label class="f">Madre (número)<input id="aMadre" value="${esc(e.madre || "")}" autocomplete="off"></label>
       <label class="f">Propósito<select id="aProp"><option value="">Según el estado</option><option value="leche"${e.proposito === "leche" ? " selected" : ""}>Leche</option><option value="carne"${e.proposito === "carne" ? " selected" : ""}>Carne</option><option value="doble"${e.proposito === "doble" ? " selected" : ""}>Doble propósito</option></select></label>
       <label class="f">Origen<select id="aOrigen"><option value="nacida">Nacida en la finca</option><option value="comprada"${e.origen === "comprada" ? " selected" : ""}>Comprada</option></select></label>
-      <label class="f full">Fecha del último parto (si ya parió)<input type="date" id="aParto" max="${hoy()}"></label>
+      <label class="f" id="lParto">Fecha del último parto (si ya parió)<input type="date" id="aParto" max="${hoy()}"></label>
+      <label class="f" id="lNPartos">Partos que lleva en total<input id="aNPartos" inputmode="numeric" value="${an ? ciclo(an).nPartos || "" : ""}" placeholder="0"></label>
       <label class="f full">Peso en kg (opcional; también puede medirlo con cinta desde la ficha)<input id="aPeso" inputmode="numeric" value="${e.peso ?? ""}"></label>
       <button class="btn full" type="submit">Guardar</button>
     </form>`, (s) => {
-    if (an) $("#aParto", s).closest("label").hidden = true;
+    if (an) $("#lParto", s).hidden = true;
+    const verPartos = () => ($("#lNPartos", s).hidden = $("#aSexo", s).value === "M"); verPartos(); $("#aSexo", s).onchange = verPartos;
     $("#fA", s).onsubmit = (ev) => { ev.preventDefault();
       const arete = $("#aArete", s).value.trim(); if (!arete) return;
       const id = slug(arete);
@@ -642,6 +644,9 @@ function formAnimal(an) {
       if (kg && kg !== e.peso) Object.assign(data, { peso: kg, pesoFecha: hoy(), pesoMetodo: "bascula" });
       if (!kg) { delete data.peso; delete data.pesoFecha; delete data.pesoMetodo; }
       const parto = $("#aParto", s).value;
+      const enApp = evDe(arete).filter((x) => x.tipo === "parto").length + (!an && parto ? 1 : 0);
+      const total = data.sexo === "M" ? 0 : pint($("#aNPartos", s).value) || 0;
+      data.partosPrevios = Math.max(0, total - enApp); if (!data.partosPrevios) delete data.partosPrevios;
       guardarYcerrar(async () => { await save("animales", data); if (!an && parto) await save("eventos", { id: uid(), arete, tipo: "parto", fecha: parto, nota: "Registrado al ingresar la res" }); }, "Res guardada");
     };
   });
@@ -764,7 +769,7 @@ function formCalidad() {
 
 function detalle(arete) {
   const an = S.animales.find((a) => a.arete === arete); if (!an) return;
-  const c = ciclo(an); const ev = evDe(arete).reverse(); const crias = S.animales.filter((a) => a.madre === arete);
+  const c = ciclo(an); const ev = evDe(arete).reverse(); const ordParto = new Map(evDe(arete).filter((e) => e.tipo === "parto").map((e, i) => [e.id, i + 1 + (an.partosPrevios || 0)])); const crias = S.animales.filter((a) => a.madre === arete);
   const r = retiro(arete);
   const hembraAdulta = an.sexo !== "M" && !["ternera"].includes(an.estado);
   const w = pesoAnimal(an), v = valorAnimal(an), dsc = evalDescarte(an);
@@ -787,7 +792,7 @@ function detalle(arete) {
       <button class="accion" type="button" data-x="peso"><b>Registrar peso</b></button>
       <button class="accion" type="button" data-x="sintomas"><b>Revisar síntomas</b></button>
     </div>
-    <div><span class="eyebrow">Historial</span><div class="timeline" style="margin-top:8px">${ev.length ? ev.map((e) => `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(e.tipo === "obs" ? e.obs : TIPOS[e.tipo] || e.tipo)}</b>${e.cria ? ` (cría ${esc(e.cria)})` : ""}${e.producto ? " · " + esc(e.producto) : ""}${e.retiroHasta ? ` · retiro hasta ${fmt(e.retiroHasta)}` : ""}${e.kg ? ` · ${nf(e.kg)} kg` : ""}${e.valor ? ` · ${pesos(e.valor)}` : ""}${e.tipo === "salud" && e.posibles ? `<br><span class="small">Posibles: ${esc(e.posibles.slice(0, 3).join(", ") || "sin coincidencias")}</span>` : ""}${e.nota ? `<br><span class="small muted">${esc(e.nota)}</span>` : ""}</div>`).join("") : '<div class="muted">Sin registros.</div>'}</div></div>
+    <div><span class="eyebrow">Historial</span><div class="timeline" style="margin-top:8px">${ev.length ? ev.map((e) => `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(e.tipo === "obs" ? e.obs : e.tipo === "parto" ? `${ordParto.get(e.id)}.º parto` : TIPOS[e.tipo] || e.tipo)}</b>${e.cria ? ` (cría ${esc(e.cria)})` : ""}${e.producto ? " · " + esc(e.producto) : ""}${e.retiroHasta ? ` · retiro hasta ${fmt(e.retiroHasta)}` : ""}${e.kg ? ` · ${nf(e.kg)} kg` : ""}${e.valor ? ` · ${pesos(e.valor)}` : ""}${e.tipo === "salud" && e.posibles ? `<br><span class="small">Posibles: ${esc(e.posibles.slice(0, 3).join(", ") || "sin coincidencias")}</span>` : ""}${e.nota ? `<br><span class="small muted">${esc(e.nota)}</span>` : ""}</div>`).join("") : '<div class="muted">Sin registros.</div>'}</div></div>
     <div class="row"><button class="btn ghost sm" type="button" data-x="editar">Editar datos</button><button class="btn ghost sm" type="button" data-x="vender">${an.estado === "vendida" ? "Ya vendida" : "Vender"}</button><button class="btn ghost sm" type="button" data-x="borrar">Eliminar</button></div>`,
   (s) => {
     $$("[data-n]", s).forEach((b) => (b.onclick = async () => { await save("animales", { ...an, nivel: b.dataset.n }); toast("Producción actualizada"); render(); detalle(arete); }));

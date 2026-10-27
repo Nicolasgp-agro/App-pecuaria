@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.4.0";
+const APP_VERSION = "2.5.0";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -1854,12 +1854,13 @@ function resultadoSintomas(q) {
 let NUBE_CONF = null, cliente = null, sesion = null, sincronizando = false, timerSync = null;
 const ROLES = { dueno: "Dueño", ordenador: "Ordeñador", veterinario: "Veterinario" };
 const nubeCfg = () => ({ fincaId: null, fincaNombre: "", rol: null, ultimoPull: null, ultimaSync: null, error: null, ...(S.config.find((c) => c.id === "nube") || {}), id: "nube" });
-const nubeActiva = () => !!(NUBE_CONF && sesion && nubeCfg().fincaId);
+const nubeActiva = () => !!(NUBE_CONF && nubeCfg().fincaId);
 const puedeVerPlata = () => !nubeActiva() || nubeCfg().rol === "dueno" || !nubeCfg().rol;
 async function guardarNube(cambios) { await save("config", { ...nubeCfg(), ...cambios }, { remoto: true }); }
 async function cargarConfNube() {
   if (window.__HC_REMOTO) { NUBE_CONF = { prueba: true }; return; }
-  try { const r = await fetch("nube.json", { cache: "no-cache" }); if (r.ok) { const d = await r.json(); if (d && d.url && d.anonKey) NUBE_CONF = d; } } catch (e) {}
+  try { const r = await fetch("nube.json", { cache: "no-cache" }); if (r.ok) { const d = await r.json(); if (d && d.url && d.anonKey) { NUBE_CONF = d; try { localStorage.setItem("hc-nube-conf", JSON.stringify(d)); } catch (e) {} } } } catch (e) {}
+  if (!NUBE_CONF) { try { const d = JSON.parse(localStorage.getItem("hc-nube-conf") || "null"); if (d && d.url && d.anonKey) NUBE_CONF = d; } catch (e) {} }
 }
 function cargarSupabase() {
   if (window.supabase && window.supabase.createClient) return Promise.resolve(window.supabase);
@@ -1899,6 +1900,7 @@ async function sincronizar({ silencioso = true } = {}) {
   sincronizando = true; let cambios = 0;
   try {
     const r = await remoto(), n = nubeCfg(), finca = n.fincaId;
+    if (!sesion) { try { sesion = await r.sesion(); } catch (e) {} if (!sesion) throw new Error("Entre otra vez con su correo en Más"); if (!n.email) await guardarNube({ email: sesion.email }); }
     // 1. subir lo pendiente
     const cola = await leerCola();
     for (let i = 0; i < cola.length; i += 200) {
@@ -1936,7 +1938,7 @@ async function encolarTodo() {
 async function conectarFinca(f, modo) {
   // modo: "subir" (esta finca local va a la nube), "bajar" (reemplazar lo local con lo de la nube)
   if (modo === "bajar") await vaciarTodo(CONFIG_LOCAL);
-  await guardarNube({ fincaId: f.id, fincaNombre: f.nombre, rol: f.rol, ultimoPull: null, error: null });
+  await guardarNube({ fincaId: f.id, fincaNombre: f.nombre, rol: f.rol, email: sesion && sesion.email, ultimoPull: null, error: null });
   if (modo === "subir") await encolarTodo();
   await sincronizar({ silencioso: false });
 }
@@ -1945,6 +1947,11 @@ function panelNube() {
   if (!NUBE_CONF) return `<div class="panel stack"><h2>Varios celulares y personas</h2>
       <p class="muted">Para que el ordeñador registre en la finca y usted vea todo desde otro celular, hace falta activar el servidor de Hato Claro. Todavía no está configurado.</p></div>`;
   const n = nubeCfg();
+  if (!sesion && n.fincaId) return `<div class="panel stack"><h2>Finca en la nube</h2>
+      <div class="facts small muted"><div>Finca<b>${esc(n.fincaNombre)}</b></div><div>Su rol<b>${esc(ROLES[n.rol] || n.rol || "–")}</b></div></div>
+      <p class="small muted">Sin conexión con la nube en este momento. Puede seguir registrando: todo se envía cuando vuelva la señal.</p>
+      <button class="btn ghost" type="button" id="nuEntrar">Entrar otra vez con mi correo</button>
+      <button class="btn ghost" type="button" id="nuSalir">Salir de la cuenta</button></div>`;
   if (!sesion) return `<div class="panel stack"><h2>Varios celulares y personas</h2>
       <p class="muted">Entre con su correo para guardar la finca en la nube, verla en varios celulares e invitar al ordeñador o al veterinario.</p>
       <button class="btn" type="button" id="nuEntrar">Entrar con mi correo</button></div>`;
@@ -1969,14 +1976,14 @@ function enlazarNube(el) {
 }
 function formEntrar() {
   sheet(cab("Entrar con su correo") + `
-    <p class="small muted">Le enviamos un código de 6 números a su correo. No necesita contraseña.</p>
+    <p class="small muted">Le enviamos un código a su correo. No necesita contraseña.</p>
     <form id="fEn" class="stack"><label class="f">Correo<input id="enM" type="email" autocomplete="email" required placeholder="nombre@correo.com"></label><button class="btn" type="submit">Enviarme el código</button></form>
     <form id="fCo" class="stack" hidden><label class="f">Código que le llegó<input id="enC" class="big" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="000000"></label><button class="btn" type="submit">Entrar</button><p class="small muted">Si no le llega en un par de minutos, revise la carpeta de spam.</p></form>`, (s) => {
     let email = "";
     $("#fEn", s).onsubmit = async (ev) => { ev.preventDefault(); email = $("#enM", s).value.trim().toLowerCase();
       try { await (await remoto()).enviarCodigo(email); $("#fEn", s).hidden = true; $("#fCo", s).hidden = false; $("#enC", s).focus(); } catch (e) { toast("No se pudo enviar el código: " + e.message); } };
     $("#fCo", s).onsubmit = async (ev) => { ev.preventDefault();
-      try { sesion = await (await remoto()).verificarCodigo(email, $("#enC", s).value.trim()); toast("Entró como " + sesion.email); elegirFinca(); } catch (e) { toast("Código incorrecto o vencido"); } };
+      try { sesion = await (await remoto()).verificarCodigo(email, $("#enC", s).value.trim()); toast("Entró como " + sesion.email); if (nubeCfg().fincaId) { cerrar(); await guardarNube({ email: sesion.email, error: null }); sincronizar(); render(); } else elegirFinca(); } catch (e) { toast("Código incorrecto o vencido"); } };
   });
 }
 async function elegirFinca() {
@@ -2143,7 +2150,7 @@ function formPesajeLote(loteIn, minGdp, objetivoLote) {
 }
 
 /* ---------- palpación, hoja de vida y registros ---------- */
-const quienSoy = () => { try { return sesion && sesion.email ? sesion.email : null; } catch (e) { return null; } };
+const quienSoy = () => { try { return (sesion && sesion.email) || nubeCfg().email || null; } catch (e) { return null; } };
 const mesesTxt = (m) => { if (m == null) return ""; if (m < 1) return "menos de 1 mes"; const f = Math.floor(m), medio = m - f >= 0.5; return `${f} ${f === 1 ? "mes" : "meses"}${medio ? " y medio" : ""}`; };
 function ordinalParto(e) {
   const an = S.animales.find((a) => a.arete === e.arete);

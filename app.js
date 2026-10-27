@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.3.0";
+const APP_VERSION = "2.3.1";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -312,7 +312,7 @@ function vHato() {
       else if (c.fpp) { f2 = ["Parto probable", fmt(c.fpp)]; f3 = ["Partos", c.nPartos]; }
       else { f2 = ["Partos", c.nPartos]; f3 = ["Raza", an.raza || "–"]; }
       return `<button class="card" type="button" data-a="${esc(an.arete)}">
-        <div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h3>${esc(an.nombre || "Sin nombre")}</h3>${nivelHTML(an.nivel)}</div><span class="small muted">${an.sexo === "M" ? "Macho" : "Hembra"}</span></div>
+        <div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h3>${esc(nombreVisible(an))}</h3>${nivelHTML(an.nivel)}</div><span class="small muted">${an.sexo === "M" ? "Macho" : "Hembra"}</span></div>
         <div>${chips(an, c)}</div>
         <div class="facts small muted"><div>Edad<b>${edadTxt(an.nacimiento)}</b></div><div>${f2[0]}<b>${esc(f2[1])}</b></div><div>${f3[0]}<b>${esc(f3[1])}</b></div></div>
       </button>`;
@@ -790,8 +790,9 @@ function detalle(arete) {
   const r = retiro(arete);
   const hembraAdulta = an.sexo !== "M" && !["ternera"].includes(an.estado);
   const plata = puedeVerPlata(); const w = pesoAnimal(an), v = plata ? valorAnimal(an) : null, dsc = plata ? evalDescarte(an) : null;
-  sheet(`<div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h2>${esc(an.nombre || "Sin nombre")}</h2></div><button class="btn ghost sm" data-close type="button">Cerrar</button></div>
+  sheet(`<div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h2>${esc(nombreVisible(an))}</h2></div><button class="btn ghost sm" data-close type="button">Cerrar</button></div>
     <div class="row spread"><div>${chips(an, c)}</div><button class="btn ghost sm" type="button" data-x="hv">📋 Hoja de vida</button></div>
+    ${an.revisar ? `<div class="alerta"><span class="quien">Por revisar</span><span>${esc(an.revisar)}</span><button class="btn ghost sm" type="button" data-x="revisado" style="margin-top:6px">Ya lo revisé</button></div>` : ""}
     ${r ? `<div class="alerta bad"><span class="quien">Leche en retiro</span><span>No entregar hasta el ${fmt(r.retiroHasta)} inclusive${r.producto ? " · " + esc(r.producto) : ""}.</span></div>` : ""}
     <div class="facts small muted"><div>Raza<b>${esc(an.raza || "–")}</b></div><div>Edad<b>${edadTxt(an.nacimiento)}</b></div><div>Madre<b>${esc(an.madre || "–")}</b></div>
       <div>Partos<b>${c.nPartos}</b></div><div>Días parida<b>${c.del ?? "–"}</b></div><div>Parto prob.<b>${fmt(c.fpp)}</b></div>
@@ -820,6 +821,7 @@ function detalle(arete) {
       else if (x === "peso") formPeso(an);
       else if (x === "sintomas") formSintomas(arete);
       else if (x === "hv") hojaVida(arete);
+      else if (x === "revisado") { const { revisar, ...resto } = an; save("animales", resto).then(() => { toast("Listo"); render(); detalle(arete); }); }
       else if (x === "borrar") confirmar(this, "Toque otra vez para eliminar", () => guardarYcerrar(() => del("animales", an.id), "Res eliminada"));
       else abrir(x, arete);
     }));
@@ -932,7 +934,7 @@ function panelMercado() {
     <div class="stack">
       <div class="row spread"><b>Candidatas a descarte</b><span class="small muted">${cand.length || "ninguna"}</span></div>
       ${cand.length ? cand.map(({ an, d }) => `<button class="card" type="button" data-a="${esc(an.arete)}">
-        <div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h3>${esc(an.nombre || "Sin nombre")}</h3></div><b class="num">${d.valor && d.valor.descarte ? "≈ " + pesos(d.valor.descarte.valor) : ""}</b></div>
+        <div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h3>${esc(nombreVisible(an))}</h3></div><b class="num">${d.valor && d.valor.descarte ? "≈ " + pesos(d.valor.descarte.valor) : ""}</b></div>
         <span class="small muted">${esc(capital(d.motivos.join(", ")))}.</span></button>`).join("")
       : `<p class="small muted">Aquí aparecen las vacas que conviene revisar para vender: poca leche, muchos días vacía, servicios repetidos o mastitis frecuente.</p>`}
     </div>
@@ -1314,9 +1316,9 @@ function plata(t) {
 function animalesEnTexto(t) {
   const out = new Set();
   const re = /\b(?:la|el|vaca|novilla|ternera|ternero|toro|numero|res|a la|de la)\s+(\d{1,6})\b/g; let m;
-  while ((m = re.exec(t))) { const a = S.animales.find((x) => sinTildes(x.arete.toLowerCase()) === m[1]); if (a) out.add(a.arete); }
-  S.animales.forEach((a) => { if (a.nombre && a.nombre.length > 2 && new RegExp("\\b" + sinTildes(a.nombre.toLowerCase()) + "\\b").test(t)) out.add(a.arete); });
-  if (!out.size) { (t.match(/\b\d{2,6}\b/g) || []).forEach((n) => { const a = S.animales.find((x) => x.arete === n); if (a) out.add(a.arete); }); }
+  while ((m = re.exec(t))) { const a = S.animales.find((x) => mismoArete(x.arete, m[1])); if (a) out.add(a.arete); }
+  S.animales.forEach((a) => { for (const n of [a.nombre, /\D/.test(a.arete) ? a.arete : ""]) if (n && n.length > 2 && new RegExp("(^|[^a-z0-9])" + sinTildes(n.toLowerCase()).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^a-z0-9]|$)").test(t)) out.add(a.arete); });
+  { (t.match(/\b\d{1,6}\b(?!\s*(?:mes|dia|litro|kilo|kg|cm|centimetro|mil|peso|hora|semana|%|ml|cc|bulto))/g) || []).forEach((n) => { const a = S.animales.find((x) => mismoArete(x.arete, n)); if (a) out.add(a.arete); }); }
   return [...out];
 }
 function despuesDe(t, palabras, corta = /\b(por|durante|retiro|dias|dia|a la|al|la vaca|con un)\b|[,.]/) {
@@ -1359,7 +1361,7 @@ function parseVoz(texto) {
     }
     if (/(prenad|cargad|\bcarga\b|vacia|no quedo|palp)/.test(f)) {
       const VAC = /(vacia|no quedo|no esta (?:prenad|cargad))/, PRE = /(prenad|cargad|\bcarga\b|quedo)/;
-      const pos = an.map((ar) => { const a = S.animales.find((x) => x.arete === ar); let i = f.search(new RegExp("(^|\\D)" + ar + "(\\D|$)")); if (i < 0 && a && a.nombre) i = f.indexOf(sinTildes(a.nombre.toLowerCase())); return { ar, i: Math.max(0, i) }; }).sort((x, y) => x.i - y.i);
+      const pos = an.map((ar) => { const a = S.animales.find((x) => x.arete === ar); const cands = [sinTildes(ar.toLowerCase()), /^\d+$/.test(ar) ? String(Number(ar)) : "", a && a.nombre ? sinTildes(a.nombre.toLowerCase()) : ""].filter(Boolean); let i = -1; for (const c of cands) { const m = new RegExp("(^|[^a-z0-9])" + c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^a-z0-9]|$)").exec(f); if (m) { i = m.index; break; } } return { ar, i: Math.max(0, i) }; }).sort((x, y) => x.i - y.i);
       const res = pos.map((p, k) => { const tr = f.slice(p.i, k + 1 < pos.length ? pos[k + 1].i : undefined); return { ar: p.ar, r: VAC.test(tr) ? "vacia" : PRE.test(tr) ? "prenez" : null, meses: +((/(\d+)\s*mes/.exec(tr) || [])[1]) || null }; });
       for (let k = res.length - 2; k >= 0; k--) if (!res[k].r && res[k + 1].r) { res[k].r = res[k + 1].r; res[k].meses = res[k].meses || res[k + 1].meses; }
       for (let k = 1; k < res.length; k++) if (!res[k].r) res[k].r = res[k - 1].r;
@@ -2024,6 +2026,8 @@ async function verMiembros() {
 
 /* ---------- carne: pesajes, ganancia diaria de peso y ceba ---------- */
 const cfgCarne = () => ({ pesoObjetivo: 450, gdpMin: 300, ...(S.config.find((c) => c.id === "carne") || {}), id: "carne" });
+const mismoArete = (a, b) => { a = sinTildes(String(a).toLowerCase()); b = sinTildes(String(b).toLowerCase()); return a === b || (/^\d+$/.test(a) && /^\d+$/.test(b) && Number(a) === Number(b)); };
+const nombreVisible = (a) => a.nombre || (/^\d/.test(a.arete) ? "Sin nombre" : "");
 const toros = () => S.animales.filter((a) => a.sexo === "M" && a.estado === "toro").sort(porArete);
 const nombreServicio = (e) => { const t = e.toro && S.animales.find((a) => a.arete === e.toro); const m = e.metodo || (/pajilla|insemin/i.test(e.nota || "") ? "ia" : /toro/i.test(e.nota || "") ? "monta" : null); if (!e.metodo && m) return m === "ia" ? "Inseminación" : "Monta"; return e.metodo === "monta" ? `Monta${e.toro ? " · toro " + e.toro + (t && t.nombre ? " " + t.nombre : "") : ""}` : e.metodo === "ia" ? "Inseminación" : "Servicio"; };
 const esCarne = (a) => a.estado !== "vendida" && (a.estado === "ceba" || a.proposito === "carne" || (a.sexo === "M" && a.estado !== "toro"));
@@ -2169,8 +2173,9 @@ function buscarAnimalDicho(texto) {
   const cmd = /^(?:abr\w*|ver|vea|mostrar|muestr\w*|buscar?|busque|ensen\w*|informacion|datos|hoja de vida|historia|historial|ficha|como (?:esta|va)|de|del|la|el|a|vaca|animal|novillo|novilla|toro|ternero|ternera|res|numero|chapeta|me|por favor)\s+/;
   let prev; do { prev = t; t = t.replace(cmd, ""); } while (t !== prev);
   t = t.replace(/\s+por favor$/, "").trim();
-  if (/^\d{1,6}$/.test(t)) return S.animales.some((a) => a.arete === t) ? t : null;
-  const a = S.animales.find((x) => x.nombre && sinTildes(x.nombre.toLowerCase()) === t);
+  if (/^\d{1,6}$/.test(t)) { const a = S.animales.find((x) => x.estado !== "vendida" && mismoArete(x.arete, t)) || S.animales.find((x) => mismoArete(x.arete, t)); return a ? a.arete : null; }
+  const igual = (x) => (x.nombre && sinTildes(x.nombre.toLowerCase()) === t) || (/\D/.test(x.arete) && sinTildes(x.arete.toLowerCase()) === t);
+  const a = S.animales.find((x) => x.estado !== "vendida" && igual(x)) || S.animales.find(igual);
   return a ? a.arete : null;
 }
 function escuchar(btn, alTerminar, opt = {}) {
@@ -2203,9 +2208,10 @@ function hojaVida(arete) {
   const tag = (x) => `<button type="button" class="tagbtn" data-hv="${esc(x.arete)}"><span class="tag">${esc(x.arete)}</span> ${esc(x.nombre || "")}</button>`;
   const linea = (e) => { const d = detalleEv(e); return `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(etiquetaEvento(e))}</b>${d ? `<br><span class="small muted">${esc(d)}</span>` : ""}</div>`; };
   const seccion = (titulo, lista, max = 12) => lista.length ? `<div class="panel stack"><span class="eyebrow">${titulo}</span><div class="timeline">${lista.slice(0, max).map(linea).join("")}</div>${lista.length > max ? `<span class="small muted">y ${lista.length - max} registros más antiguos</span>` : ""}</div>` : "";
-  sheet(`<div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h2>${esc(an.nombre || "Sin nombre")}</h2></div><button class="btn ghost sm" data-close type="button">Cerrar</button></div>
+  sheet(`<div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h2>${esc(nombreVisible(an))}</h2></div><button class="btn ghost sm" data-close type="button">Cerrar</button></div>
     <span class="eyebrow">Hoja de vida</span>
     <div>${chips(an, c)}</div>
+    ${an.revisar ? `<div class="alerta"><span class="quien">Por revisar</span><span>${esc(an.revisar)}</span></div>` : ""}
     ${r ? `<div class="alerta bad"><span class="quien">Leche en retiro</span><span>No entregar hasta el ${fmt(r.retiroHasta)} inclusive${r.producto ? " · " + esc(r.producto) : ""}.</span></div>` : ""}
     <div class="facts small muted">
       <div>Raza<b>${esc(an.raza || "–")}</b></div><div>Sexo<b>${hembra ? "Hembra" : "Macho"}</b></div><div>Edad<b>${edadTxt(an.nacimiento)}</b></div>
@@ -2250,7 +2256,7 @@ function formBuscar() {
     const pintar = (t0) => {
       const t = sinTildes(String(t0).toLowerCase().trim());
       const l = t ? S.animales.filter((a) => sinTildes(a.arete.toLowerCase()).includes(t) || sinTildes((a.nombre || "").toLowerCase()).includes(t)).sort(porArete).slice(0, 20) : [];
-      $("#bRes", s).innerHTML = l.map((a) => `<button class="card" type="button" data-a="${esc(a.arete)}"><div class="row" style="gap:8px"><span class="tag">${esc(a.arete)}</span><h3>${esc(a.nombre || "Sin nombre")}</h3></div><div>${chips(a, ciclo(a))}</div></button>`).join("") || (t ? `<p class="muted">No hay ningún animal con "${esc(t0)}".</p>` : "");
+      $("#bRes", s).innerHTML = l.map((a) => `<button class="card" type="button" data-a="${esc(a.arete)}"><div class="row" style="gap:8px"><span class="tag">${esc(a.arete)}</span><h3>${esc(nombreVisible(a))}</h3></div><div>${chips(a, ciclo(a))}</div></button>`).join("") || (t ? `<p class="muted">No hay ningún animal con "${esc(t0)}".</p>` : "");
       $$("#bRes [data-a]", s).forEach((b) => (b.onclick = () => hojaVida(b.dataset.a)));
     };
     $("#bTxt", s).oninput = (e) => pintar(e.target.value);
@@ -2389,6 +2395,15 @@ function restaurar(file) {
   r.onload = () => {
     let d; try { d = JSON.parse(r.result); } catch (e) { return toast("Ese archivo no es una copia de Hato Claro"); }
     if (!d || d.app !== "hato-claro" || !d.datos) return toast("Ese archivo no es una copia de Hato Claro");
+    if (d.tipo === "importacion") {
+      const nuevos = (c) => (d.datos[c] || []).filter((o) => o && o.id && !S[c].some((x) => x.id === o.id));
+      const na = nuevos("animales"), ne = nuevos("eventos");
+      return sheet(cab("Cargar datos de la finca") + `<p>${esc(d.origen || "Datos para cargar")}.</p>
+        <div class="facts small muted"><div>Animales nuevos<b>${na.length}</b></div><div>Registros nuevos<b>${ne.length}</b></div><div>Ya estaban<b>${(d.datos.animales || []).length - na.length}</b></div></div>
+        <p class="muted small">Se agregan a lo que ya tiene en este celular. No se borra nada. Los animales con dudas quedan marcados "Por revisar".</p>
+        <button class="btn" type="button" id="iOk">Cargar ${na.length} animales</button>`,
+        (s) => ($("#iOk", s).onclick = () => guardarYcerrar(async () => { for (const c of COLS) for (const o of nuevos(c)) await save(c, o); }, `${na.length} animales y ${ne.length} registros cargados`)));
+    }
     sheet(cab("Restaurar copia") + `<p>Copia del ${esc(new Date(d.fecha).toLocaleDateString("es-CO"))} con ${(d.datos.animales || []).length} animales y ${(d.datos.entregas || []).length} entregas.</p><p class="muted">Lo que hay ahora en este celular se reemplaza por la copia.</p><button class="btn danger" type="button" id="rOk">Reemplazar mis datos</button>`,
       (s) => ($("#rOk", s).onclick = () => guardarYcerrar(async () => { await vaciarTodo(); for (const c of COLS) for (const o of d.datos[c] || []) if (o && o.id) await save(c, o); }, "Copia restaurada")));
   };

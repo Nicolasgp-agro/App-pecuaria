@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.5.1";
+const APP_VERSION = "2.6.0";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -295,20 +295,40 @@ function vHato() {
   if (subHato === "salud") return vSalud(cont);
   if (subHato === "carne") return vPeso(cont);
   if (subHato === "registros") return vRegistros(cont);
-  const filtros = [["", "Todos"], ["lactancia", "En ordeño"], ["seca", "Secas"], ["novilla", "Novillas"], ["ternera", "Terneras/os"], ["ceba", "Ceba"], ["toro", "Toros"], ["vendida", "Vendidas"]];
+  const plata = puedeVerPlata(), h = hoy(), vivos = S.animales.filter((a) => a.estado !== "vendida");
+  const info = new Map(vivos.map((a) => [a.arete, { c: ciclo(a), v: plata ? valorAnimal(a) : null }]));
+  const ESP = {
+    prenadas: ["Preñadas", (a, x) => x.c.prenada],
+    porpalpar: ["Por palpar", (a, x) => !x.c.prenada && a.sexo !== "M" && x.c.ultServ && (!x.c.ultParto || x.c.ultServ.fecha > x.c.ultParto) && diff(h, x.c.ultServ.fecha) >= 35 && /sin palpar/.test(estadoRepro(a, x.c) || "")],
+    vacias: ["Vacías por servir", (a, x) => { const e = estadoRepro(a, x.c) || ""; return /^Vacía/.test(e) || (/^Sin servicio/.test(e) && ["lactancia", "seca"].includes(a.estado) && (!x.c.ultParto || diff(h, x.c.ultParto) > ESPERA)); }],
+    partos: ["Paren en 30 días", (a, x) => x.c.fpp && diff(x.c.fpp, h) <= 30],
+    secar: ["Por secar", (a, x) => a.estado === "lactancia" && x.c.fpp && diff(x.c.fpp, h) <= SECADO],
+    retiro: ["Leche en retiro", (a) => !!retiro(a.arete)],
+  };
+  const EST = [["lactancia", "En ordeño"], ["seca", "Secas"], ["novilla", "Novillas"], ["ternera", "Terneras/os"], ["ceba", "Ceba"], ["toro", "Toros"]];
+  const grupo = (f) => vivos.filter((a) => f(a, info.get(a.arete)));
+  const suma = (l) => l.reduce((t, a) => t + ((info.get(a.arete).v || {}).valor || 0), 0);
+  const tile = (k, label, l, extra) => `<button type="button" class="tile" data-f="${k}" aria-pressed="${filtroHato === k}"><b>${l.length}</b><span>${label}</span>${extra ? `<small>${extra}</small>` : ""}</button>`;
+  const adultas = vivos.filter((a) => ["lactancia", "seca"].includes(a.estado)).length;
+  const nVend = S.animales.length - vivos.length;
   cont.innerHTML = `
-    <div class="row spread"><div><h2>Hato · ${S.animales.filter((a) => a.estado !== "vendida").length} animales</h2>${S.animales.some(esCarne) ? `<span class="small muted">${S.animales.filter((a) => a.estado !== "vendida" && !esCarne(a)).length} de leche · ${S.animales.filter(esCarne).length} de ceba</span>` : ""}</div><button class="btn sm" id="hNuevo" type="button">+ Nueva res</button></div>
-    ${S.animales.length && puedeVerPlata() ? panelMercado() : ""}
+    <div class="row spread"><div><h2>Hato · ${vivos.length} animales</h2>${plata && vivos.length ? `<span class="small muted">Valor estimado ${pesos(suma(vivos))}</span>` : ""}</div><button class="btn sm" id="hNuevo" type="button">+ Nueva res</button></div>
+    ${vivos.length ? `<div class="stack" style="gap:6px"><span class="eyebrow">Por estado</span><div class="tablero">${EST.map(([k, v]) => { const l = vivos.filter((a) => a.estado === k); return l.length || ["lactancia", "seca"].includes(k) ? tile(k, v, l, plata ? (suma(l) ? pesos(suma(l)) : "") : vivos.length ? Math.round((l.length / vivos.length) * 100) + "% del hato" : "") : ""; }).join("")}</div></div>
+    <div class="stack" style="gap:6px"><span class="eyebrow">Reproducción</span><div class="tablero">${Object.entries(ESP).map(([k, [v, f]]) => { const l = grupo(f); return tile("@" + k, v, l, k === "prenadas" && adultas ? Math.round((l.length / adultas) * 100) + "% de vacas" : ""); }).join("")}</div></div>
+    ${plata ? `<details class="panel"><summary class="row spread" style="cursor:pointer"><b>Valor, precios y descarte</b><span class="small muted">ver</span></summary><div style="margin-top:10px">${panelMercado()}</div></details>` : ""}` : ""}
     <div class="row" style="gap:8px;flex-wrap:nowrap"><input type="search" id="hBusca" placeholder="Buscar por número o nombre" value="${esc(buscaHato)}" autocomplete="off" aria-label="Buscar animal" style="flex:1">${window.SpeechRecognition || window.webkitSpeechRecognition ? `<button class="btn ghost" type="button" id="hMic" aria-label="Buscar hablando" style="flex:none">🎙</button>` : ""}</div>
-    <div class="chips">${filtros.map(([k, v]) => `<button class="chipbtn" type="button" data-f="${k}" aria-pressed="${filtroHato === k}">${v}</button>`).join("")}</div>
+    <div class="row spread"><b id="hTit"></b><span class="row" style="gap:6px">${filtroHato ? `<button class="btn ghost sm" type="button" data-f="">Ver todos</button>` : ""}${nVend && filtroHato !== "vendida" ? `<button class="btn ghost sm" type="button" data-f="vendida">Ya no están (${nVend})</button>` : ""}</span></div>
     <div class="lista" id="hLista"></div>`;
   const pintarLista = () => {
     const t = buscaHato.trim().toLowerCase();
-    const lista = S.animales.filter((a) => (filtroHato ? a.estado === filtroHato : a.estado !== "vendida") && (!t || a.arete.toLowerCase().includes(t) || (a.nombre || "").toLowerCase().includes(t))).sort(porArete);
+    const esp = filtroHato.startsWith("@") ? ESP[filtroHato.slice(1)] : null;
+    const enGrupo = (a) => (esp ? a.estado !== "vendida" && esp[1](a, info.get(a.arete)) : filtroHato ? a.estado === filtroHato : a.estado !== "vendida");
+    const lista = S.animales.filter((a) => enGrupo(a) && (!t || a.arete.toLowerCase().includes(t) || (a.nombre || "").toLowerCase().includes(t))).sort(porArete);
+    const tit = $("#hTit", cont); if (tit) tit.textContent = `${esp ? esp[0] : filtroHato ? (filtroHato === "vendida" ? "Ya no están (vendidas o descarte)" : ESTADOS[filtroHato]) : "Todos los animales"} · ${lista.length}`;
     $("#hLista", cont).innerHTML = lista.length ? lista.map((an) => {
       const c = ciclo(an);
       let f2, f3;
-      if (an.estado === "lactancia") { f2 = ["Días de parida", c.del ?? "–"]; f3 = ["Producción", an.nivel ? an.nivel[0].toUpperCase() + an.nivel.slice(1) : "–"]; }
+      if (an.estado === "lactancia") { f2 = ["Días de parida", c.del ?? "–"]; f3 = c.fpp ? ["Parto probable", fmt(c.fpp)] : ["Producción", an.nivel ? an.nivel[0].toUpperCase() + an.nivel.slice(1) : "–"]; }
       else if (c.fpp) { f2 = ["Parto probable", fmt(c.fpp)]; f3 = ["Partos", c.nPartos]; }
       else { f2 = ["Partos", c.nPartos]; f3 = ["Raza", an.raza || "–"]; }
       return `<button class="card" type="button" data-a="${esc(an.arete)}">
@@ -325,7 +345,7 @@ function vHato() {
   const hm = $("#hMic", cont); if (hm) hm.onclick = () => escuchar(hm, (txt) => { const ar = buscarAnimalDicho(txt); if (ar) return hojaVida(ar); buscaHato = txt.replace(/\D+/g, " ").trim().split(" ")[0] || txt; $("#hBusca", cont).value = buscaHato; pintarLista(); });
   $("#hNuevo", cont).onclick = () => formAnimal();
   const hp = $("#hPrecios", cont); if (hp) hp.onclick = formPrecios;
-  $$("[data-f]", cont).forEach((b) => (b.onclick = () => { filtroHato = b.dataset.f; vHato(); }));
+  $$("[data-f]", cont).forEach((b) => (b.onclick = () => { filtroHato = filtroHato === b.dataset.f ? "" : b.dataset.f; vHato(); const l = $("#hTit"); if (l && filtroHato) l.scrollIntoView({ block: "start", behavior: "smooth" }); }));
   $$(".panel .card[data-a]", cont).forEach((b) => (b.onclick = () => detalle(b.dataset.a)));
 }
 

@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.7.1";
+const APP_VERSION = "2.8.0";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -32,7 +32,7 @@ const porArete = (a, b) => a.arete.localeCompare(b.arete, "es", { numeric: true 
 
 const TIPOS = {
   parto: "Parto", servicio: "Monta / inseminación", prenez: "Preñez confirmada", vacia: "Diagnóstico: vacía",
-  celo: "Celo observado", secado: "Secado", tratamiento: "Tratamiento", vacuna: "Vacuna / desparasitación", obs: "Observación", peso: "Pesaje", leche: "Control lechero", venta: "Venta", salud: "Revisión de síntomas"
+  celo: "Celo observado", secado: "Secado", tratamiento: "Tratamiento", vacuna: "Vacuna / desparasitación", obs: "Observación", peso: "Pesaje", leche: "Control lechero", movimiento: "Cambio de hato", venta: "Venta", salud: "Revisión de síntomas"
 };
 const ESTADOS = { lactancia: "En ordeño", seca: "Seca", novilla: "Novilla", ternera: "Ternera/o", ceba: "Levante / ceba", toro: "Toro", vendida: "Vendida / descarte" };
 const OBS = ["Bajó la leche", "Ubre caliente o hinchada", "Leche con grumos", "Cojea", "No come bien", "Celo", "Otra"];
@@ -70,6 +70,7 @@ async function encolar(col, id, borrado) {
   programarSync();
 }
 async function save(col, obj, opt = {}) {
+  if (col === "eventos" && !opt.remoto && !obj.creado) obj = { ...obj, creado: new Date().toISOString() };
   if (col === "eventos" && !opt.remoto && !obj.por) { const yo = quienSoy(); if (yo) obj = { ...obj, por: yo }; }
   const i = S[col].findIndex((x) => x.id === obj.id);
   i >= 0 ? (S[col][i] = obj) : S[col].push(obj);
@@ -135,7 +136,7 @@ function resumenLeche() {
 function alertas() {
   const out = [], h = hoy();
   for (const an of S.animales) {
-    if (an.estado === "vendida") continue;
+    if (an.estado === "vendida" || !enSel(an)) continue;
     const nom = `<span class="quien">${esc(an.arete)}${an.nombre ? " · " + esc(an.nombre) : ""}</span>`;
     const r = retiro(an.arete);
     if (r) out.push({ k: "bad", o: 0, h: `${nom}<span>No entregar su leche hasta el ${fmt(r.retiroHasta)} inclusive${r.producto ? " (" + esc(r.producto) + ")" : ""}. Ordéñela aparte.</span>` });
@@ -240,8 +241,8 @@ function vInicio() {
     $("#wEjemplo").onclick = async () => { if ($("#wNombre").value.trim()) await save("config", { ...cfg(), nombre: $("#wNombre").value.trim() }); await cargarEjemplo(); toast("Datos de ejemplo cargados"); render(); };
     return;
   }
-  const lact = S.animales.filter((a) => a.estado === "lactancia");
-  const adultas = S.animales.filter((a) => ["lactancia", "seca"].includes(a.estado));
+  const lact = S.animales.filter((a) => a.estado === "lactancia" && enSel(a));
+  const adultas = S.animales.filter((a) => ["lactancia", "seca"].includes(a.estado) && enSel(a));
   const pren = adultas.filter((a) => ciclo(a).prenada);
   const L = resumenLeche();
   const precio = cfg().precioLitro;
@@ -249,7 +250,7 @@ function vInicio() {
   if (L.ult && L.prom7) { const p = (L.ult.litros / L.prom7 - 1) * 100; delta = `<span class="delta ${p >= 0 ? "up" : "down"}">${p >= 0 ? "▲" : "▼"} ${nf(Math.abs(p))}% vs. semana</span>`; }
   const al = alertas();
   const entregaHoy = S.entregas.find((e) => e.fecha === hoy());
-  el.innerHTML = `
+  el.innerHTML = barraHatos() + panelNovedades() + `
     <div class="kpis">
       <div class="kpi hero"><div><span class="eyebrow">${L.ult ? (L.ult.fecha === hoy() ? "Entregado hoy" : "Última entrega · " + fmt(L.ult.fecha)) : "Leche entregada"}</span><b class="num">${L.ult ? nf(L.ult.litros) + " L" : "–"}</b>${delta}</div>
         ${entregaHoy ? "" : `<button class="btn" id="qEntrega" type="button">Registrar leche de hoy</button>`}</div>
@@ -281,6 +282,7 @@ function vInicio() {
   const q = $("#qEntrega"); if (q) q.onclick = () => formEntrega();
   const qp = $("#qPrecio"); if (qp) qp.onclick = () => setVista("mas");
   const qv = $("#qVoz"); if (qv) qv.onclick = abrirVoz;
+  enlazarBarraHatos(el); enlazarNovedades(el);
   $$("[data-q]", el).forEach((b) => (b.onclick = () => abrir(b.dataset.q)));
 }
 function abrir(q, arete) {
@@ -293,15 +295,16 @@ function abrir(q, arete) {
 function vHato() {
   const el = $("#v-hato");
   const SUBS = [["animales", "Animales"], ["ciclos", "Ciclos"], ["carne", "Peso"], ["salud", "Salud"], ["registros", "Registros"]];
-  el.innerHTML = `<div class="seg" role="tablist">${SUBS.map(([k, v]) => `<button type="button" role="tab" data-sub="${k}" aria-selected="${subHato === k}">${v}</button>`).join("")}</div><div id="hCont" class="vista"></div>`;
+  el.innerHTML = barraHatos() + `<div class="seg" role="tablist">${SUBS.map(([k, v]) => `<button type="button" role="tab" data-sub="${k}" aria-selected="${subHato === k}">${v}</button>`).join("")}</div><div id="hCont" class="vista"></div>`;
   $$("[data-sub]", el).forEach((b) => (b.onclick = () => { subHato = b.dataset.sub; vHato(); }));
+  enlazarBarraHatos(el);
   const cont = $("#hCont", el);
   if (subHato === "ciclos") return vCiclos(cont);
   if (subHato === "salud") return vSalud(cont);
   if (subHato === "carne") return vPeso(cont);
   if (subHato === "registros") return vRegistros(cont);
-  const plata = puedeVerPlata(), h = hoy(), vivos = S.animales.filter((a) => a.estado !== "vendida");
-  const info = new Map(vivos.map((a) => [a.arete, { c: ciclo(a), v: plata ? valorAnimal(a) : null }]));
+  const plata = puedeVerPlata(), h = hoy(), vivos = S.animales.filter((a) => a.estado !== "vendida" && enSel(a)), fuera = S.animales.filter(fueraDeSel);
+  const info = new Map(vivos.map((a) => [a.arete, { c: ciclo(a), v: null }]));
   const ESP = {
     prenadas: ["Preñadas", (a, x) => x.c.prenada],
     porpalpar: ["Por palpar", (a, x) => !x.c.prenada && a.sexo !== "M" && x.c.ultServ && (!x.c.ultParto || x.c.ultServ.fecha > x.c.ultParto) && diff(h, x.c.ultServ.fecha) >= 35 && /sin palpar/.test(estadoRepro(a, x.c) || "")],
@@ -317,17 +320,17 @@ function vHato() {
   const adultas = vivos.filter((a) => ["lactancia", "seca"].includes(a.estado)).length;
   const nVend = S.animales.length - vivos.length;
   cont.innerHTML = `
-    <div class="row spread"><div><h2>Hato · ${vivos.length} animales</h2>${plata && vivos.length ? `<span class="small muted">Valor estimado ${pesos(suma(vivos))}</span>` : ""}</div><button class="btn sm" id="hNuevo" type="button">+ Nueva res</button></div>
-    ${vivos.length ? `<div class="stack" style="gap:6px"><span class="eyebrow">Por estado</span><div class="tablero">${EST.map(([k, v]) => { const l = vivos.filter((a) => a.estado === k); return l.length || ["lactancia", "seca"].includes(k) ? tile(k, v, l, plata ? (suma(l) ? pesos(suma(l)) : "") : vivos.length ? Math.round((l.length / vivos.length) * 100) + "% del hato" : "") : ""; }).join("")}</div></div>
-    <div class="stack" style="gap:6px"><span class="eyebrow">Reproducción</span><div class="tablero">${Object.entries(ESP).map(([k, [v, f]]) => { const l = grupo(f); return tile("@" + k, v, l, k === "prenadas" && adultas ? Math.round((l.length / adultas) * 100) + "% de vacas" : ""); }).join("")}</div></div>
-    ${plata ? `<details class="panel"><summary class="row spread" style="cursor:pointer"><b>Valor, precios y descarte</b><span class="small muted">ver</span></summary><div style="margin-top:10px">${panelMercado()}</div></details>` : ""}` : ""}
+    <div class="row spread"><div><h2>${hatoValido() ? esc(nombreHato(hatoSel)) : "Hato"} · ${vivos.length} ${vivos.length === 1 ? "animal" : "animales"}</h2>${hatosLista().length ? `<button class="btn ghost sm" type="button" id="hMover" style="margin-top:4px">Mover animales</button>` : `<button class="btn ghost sm" type="button" id="hHatos" style="margin-top:4px">¿Varios hatos o lotes?</button>`}</div><button class="btn sm" id="hNuevo" type="button">+ Nueva res</button></div>
+    ${vivos.length ? `<div class="stack" style="gap:6px"><span class="eyebrow">Por estado</span><div class="tablero">${EST.map(([k, v]) => { const l = vivos.filter((a) => a.estado === k); return l.length || ["lactancia", "seca"].includes(k) ? tile(k, v, l, vivos.length ? Math.round((l.length / vivos.length) * 100) + "% del hato" : "") : ""; }).join("")}</div></div>
+    <div class="stack" style="gap:6px"><span class="eyebrow">Reproducción</span><div class="tablero">${Object.entries(ESP).map(([k, [v, f]]) => { const l = grupo(f); return tile("@" + k, v, l, k === "prenadas" && adultas ? Math.round((l.length / adultas) * 100) + "% de vacas" : ""); }).join("")}${fuera.length ? tile("@fuera", "De este hato, en otro lugar", fuera, "") : ""}</div></div>
+` : ""}
     <div class="row" style="gap:8px;flex-wrap:nowrap"><input type="search" id="hBusca" placeholder="Buscar por número o nombre" value="${esc(buscaHato)}" autocomplete="off" aria-label="Buscar animal" style="flex:1">${window.SpeechRecognition || window.webkitSpeechRecognition ? `<button class="btn ghost" type="button" id="hMic" aria-label="Buscar hablando" style="flex:none">🎙</button>` : ""}</div>
     <div class="row spread"><b id="hTit"></b><span class="row" style="gap:6px">${filtroHato ? `<button class="btn ghost sm" type="button" data-f="">Ver todos</button>` : ""}${nVend && filtroHato !== "vendida" ? `<button class="btn ghost sm" type="button" data-f="vendida">Ya no están (${nVend})</button>` : ""}</span></div>
     <div class="lista" id="hLista"></div>`;
   const pintarLista = () => {
     const t = buscaHato.trim().toLowerCase();
-    const esp = filtroHato.startsWith("@") ? ESP[filtroHato.slice(1)] : null;
-    const enGrupo = (a) => (esp ? a.estado !== "vendida" && esp[1](a, info.get(a.arete)) : filtroHato ? a.estado === filtroHato : a.estado !== "vendida");
+    const esp = filtroHato.startsWith("@") ? (filtroHato === "@fuera" ? ["De este hato, en otro lugar", fueraDeSel] : ESP[filtroHato.slice(1)]) : null;
+    const enGrupo = (a) => (filtroHato === "@fuera" ? fueraDeSel(a) : enSel(a) && (esp ? a.estado !== "vendida" && esp[1](a, info.get(a.arete) || { c: ciclo(a) }) : filtroHato ? a.estado === filtroHato : a.estado !== "vendida"));
     const lista = S.animales.filter((a) => enGrupo(a) && (!t || a.arete.toLowerCase().includes(t) || (a.nombre || "").toLowerCase().includes(t))).sort(porArete);
     const tit = $("#hTit", cont); if (tit) tit.textContent = `${esp ? esp[0] : filtroHato ? (filtroHato === "vendida" ? "Ya no están (vendidas o descarte)" : ESTADOS[filtroHato]) : "Todos los animales"} · ${lista.length}`;
     $("#hLista", cont).innerHTML = lista.length ? lista.map((an) => {
@@ -339,7 +342,7 @@ function vHato() {
       return `<button class="card" type="button" data-a="${esc(an.arete)}">
         <div class="row" style="gap:12px;align-items:center;flex-wrap:nowrap">${miniFoto(an)}<div class="stack" style="gap:6px;flex:1;min-width:0">
         <div class="row spread" style="flex-wrap:nowrap"><div class="row" style="gap:8px;min-width:0"><span class="tag">${esc(an.arete)}</span><h3 style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nombreVisible(an))}</h3>${nivelHTML(an.nivel)}</div><span class="small muted">${an.sexo === "M" ? "Macho" : "Hembra"}</span></div>
-        <div>${chips(an, c)}</div></div></div>
+        <div>${chips(an, c)}${hatosLista().length && (!hatoValido() || an.lugar) ? `<span class="small muted">${esc(textoHato(an))}</span>` : ""}</div></div></div>
         <div class="facts small muted"><div>Edad<b>${edadTxt(an.nacimiento)}</b></div><div>${f2[0]}<b>${esc(f2[1])}</b></div><div>${f3[0]}<b>${esc(f3[1])}</b></div></div>
       </button>`;
     }).join("") : `<div class="empty">${t ? "Ningún animal coincide con la búsqueda." : `No hay animales ${filtroHato ? "en este grupo" : "todavía"}.<button class="btn" type="button" id="hNuevo2">Agregar la primera res</button>`}</div>`;
@@ -350,6 +353,8 @@ function vHato() {
   $("#hBusca", cont).oninput = (e) => { buscaHato = e.target.value; pintarLista(); };
   const hm = $("#hMic", cont); if (hm) hm.onclick = () => escuchar(hm, (txt) => { const ar = buscarAnimalDicho(txt); if (ar) return hojaVida(ar); buscaHato = txt.replace(/\D+/g, " ").trim().split(" ")[0] || txt; $("#hBusca", cont).value = buscaHato; pintarLista(); });
   $("#hNuevo", cont).onclick = () => formAnimal();
+  const hmv = $("#hMover", cont); if (hmv) hmv.onclick = () => formMover();
+  const hh = $("#hHatos", cont); if (hh) hh.onclick = formHatos;
   const hp = $("#hPrecios", cont); if (hp) hp.onclick = formPrecios;
   $$("[data-f]", cont).forEach((b) => (b.onclick = () => { filtroHato = filtroHato === b.dataset.f ? "" : b.dataset.f; vHato(); const l = $("#hTit"); if (l && filtroHato) l.scrollIntoView({ block: "start", behavior: "smooth" }); }));
   $$(".panel .card[data-a]", cont).forEach((b) => (b.onclick = () => detalle(b.dataset.a)));
@@ -520,7 +525,7 @@ async function guardarLiquidacion(r) {
 }
 
 function vCiclos(el) {
-  const vacas = S.animales.filter((a) => ["lactancia", "seca", "novilla"].includes(a.estado)).sort(porArete);
+  const vacas = S.animales.filter((a) => ["lactancia", "seca", "novilla"].includes(a.estado) && enSel(a)).sort(porArete);
   const prox = proximos(30);
   const ev = [...S.eventos].sort((a, b) => (a.fecha < b.fecha ? 1 : -1)).slice(0, 15);
   el.innerHTML = `
@@ -663,27 +668,34 @@ function formAnimal(an) {
       <label class="f">Estado<select id="aEstado">${Object.entries(ESTADOS).map(([k, v]) => `<option value="${k}"${(e.estado || "lactancia") === k ? " selected" : ""}>${v}</option>`).join("")}</select></label>
       <label class="f">Madre (número)<input id="aMadre" value="${esc(e.madre || "")}" autocomplete="off"></label>
       <label class="f">Propósito<select id="aProp"><option value="">Según el estado</option><option value="leche"${e.proposito === "leche" ? " selected" : ""}>Leche</option><option value="carne"${e.proposito === "carne" ? " selected" : ""}>Carne</option><option value="doble"${e.proposito === "doble" ? " selected" : ""}>Doble propósito</option></select></label>
+      ${hatosLista().length ? `<label class="f">Hato<select id="aHato"><option value="">Sin hato</option>${hatosLista().map((h) => `<option value="${esc(h.id)}"${(e.hato || (an ? "" : hatoValido() ? hatoSel : "")) === h.id ? " selected" : ""}>${esc(h.nombre)}</option>`).join("")}</select></label>` : ""}
       <label class="f">Origen<select id="aOrigen"><option value="nacida">Nacida en la finca</option><option value="comprada"${e.origen === "comprada" ? " selected" : ""}>Comprada</option></select></label>
       <label class="f" id="lParto">Fecha del último parto (si ya parió)<input type="date" id="aParto" max="${hoy()}"></label>
       <label class="f" id="lNPartos">Partos que lleva en total<input id="aNPartos" inputmode="numeric" value="${an ? ciclo(an).nPartos || "" : ""}" placeholder="0"></label>
       <label class="f full">Peso en kg (opcional; también puede medirlo con cinta desde la ficha)<input id="aPeso" inputmode="numeric" value="${e.peso ?? ""}"></label>
       <button class="btn full" type="submit">Guardar</button>
     </form>`, (s) => {
-    if (an) $("#lParto", s).hidden = true;
+    const yaParto = () => an && evDe(an.arete).some((x) => x.tipo === "parto");
+    const verParto = () => { $("#lParto", s).hidden = an ? yaParto() || !["lactancia", "seca"].includes($("#aEstado", s).value) : false; };
+    verParto(); $("#aEstado", s).addEventListener("change", verParto);
     const verPartos = () => ($("#lNPartos", s).hidden = $("#aSexo", s).value === "M"); verPartos(); $("#aSexo", s).onchange = verPartos;
     $("#fA", s).onsubmit = (ev) => { ev.preventDefault();
       const arete = $("#aArete", s).value.trim(); if (!arete) return;
       const id = slug(arete);
       if (!an && S.animales.some((a) => a.id === id)) return toast("Ya existe una res con ese número");
       const data = { ...e, id, arete, nombre: $("#aNombre", s).value.trim(), raza: $("#aRaza", s).value.trim(), sexo: $("#aSexo", s).value, nacimiento: $("#aNac", s).value, estado: $("#aEstado", s).value, madre: $("#aMadre", s).value.trim(), origen: $("#aOrigen", s).value, proposito: $("#aProp", s).value || null };
+      const hs = $("#aHato", s); if (hs) { if (hs.value) data.hato = hs.value; else delete data.hato; }
       const kg = pint($("#aPeso", s).value);
       if (kg && kg !== e.peso) Object.assign(data, { peso: kg, pesoFecha: hoy(), pesoMetodo: "bascula" });
       if (!kg) { delete data.peso; delete data.pesoFecha; delete data.pesoMetodo; }
-      const parto = $("#aParto", s).value;
-      const enApp = evDe(arete).filter((x) => x.tipo === "parto").length + (!an && parto ? 1 : 0);
+      const parto = $("#lParto", s).hidden ? "" : $("#aParto", s).value;
+      const nuevoParto = parto && !evDe(arete).some((x) => x.tipo === "parto" && x.fecha === parto);
+      const enApp = evDe(arete).filter((x) => x.tipo === "parto").length + (nuevoParto ? 1 : 0);
       const total = data.sexo === "M" ? 0 : pint($("#aNPartos", s).value) || 0;
+      if (data.estado === "novilla" && (enApp > 0 || total > 0)) return toast("Esta ya parió: no puede ser novilla. Póngala En ordeño o Seca.");
+      if (an && an.estado === "novilla" && data.estado === "lactancia" && !enApp && !total) return toast("Si ya está en ordeño es porque parió: ponga la fecha del parto o los partos que lleva.");
       data.partosPrevios = Math.max(0, total - enApp); if (!data.partosPrevios) delete data.partosPrevios;
-      guardarYcerrar(async () => { await save("animales", data); if (!an && parto) await save("eventos", { id: uid(), arete, tipo: "parto", fecha: parto, nota: "Registrado al ingresar la res" }); }, "Res guardada");
+      guardarYcerrar(async () => { await save("animales", data); if (nuevoParto) await save("eventos", { id: uid(), arete, tipo: "parto", fecha: parto, nota: an ? "Registrado al editar la res" : "Registrado al ingresar la res" }); }, "Res guardada");
     };
   });
 }
@@ -838,6 +850,7 @@ function detalle(arete) {
       <button class="accion" type="button" data-x="peso"><b>Registrar peso</b></button>
       <button class="accion" type="button" data-x="sintomas"><b>Revisar síntomas</b></button>
       <button class="accion" type="button" data-x="foto"><b>📷 Foto</b></button>
+      ${hatosLista().length ? `<button class="accion" type="button" data-x="mover"><b>Mover de hato</b></button>` : ""}
     </div>
     <div><span class="eyebrow">Historial</span><div class="timeline" style="margin-top:8px">${ev.length ? ev.map((e) => `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(etiquetaEvento(e))}</b>${e.cria ? ` (cría ${esc(e.cria)})` : ""}${e.producto ? " · " + esc(e.producto) : ""}${e.retiroHasta ? ` · retiro hasta ${fmt(e.retiroHasta)}` : ""}${e.kg ? ` · ${nf(e.kg)} kg` : ""}${e.litros ? ` · ${nf(e.litros, 1)} L` : ""}${e.valor && plata ? ` · ${pesos(e.valor)}` : ""}${e.tipo === "salud" && e.posibles ? `<br><span class="small">Posibles: ${esc(e.posibles.slice(0, 3).join(", ") || "sin coincidencias")}</span>` : ""}${e.nota || e.por || e.quien ? `<br><span class="small muted">${esc([e.quien ? "palpó " + e.quien : "", e.nota || "", e.por ? "por " + e.por.split("@")[0] : ""].filter(Boolean).join(" · "))}</span>` : ""}</div>`).join("") : '<div class="muted">Sin registros.</div>'}</div></div>
     <div class="row"><button class="btn ghost sm" type="button" data-x="editar">Editar datos</button>${plata ? `<button class="btn ghost sm" type="button" data-x="vender">${an.estado === "vendida" ? "Ya vendida" : "Vender"}</button><button class="btn ghost sm" type="button" data-x="borrar">Eliminar</button>` : ""}</div>`,
@@ -851,6 +864,7 @@ function detalle(arete) {
       else if (x === "sintomas") formSintomas(arete);
       else if (x === "hv") hojaVida(arete);
       else if (x === "foto") opcionesFoto(an, () => detalle(arete));
+      else if (x === "mover") formMover({ animales: [arete] });
       else if (x === "revisado") { const { revisar, ...resto } = an; save("animales", resto).then(() => { toast("Listo"); render(); detalle(arete); }); }
       else if (x === "borrar") confirmar(this, "Toque otra vez para eliminar", () => guardarYcerrar(async () => { await del("animales", an.id); if (fotoDe(an.arete)) await del("fotos", fotoDe(an.arete).id); }, "Res eliminada"));
       else abrir(x, arete);
@@ -1092,9 +1106,16 @@ function ingresoLecheMes(m) {
 }
 function gastosMes(m) {
   const filas = [];
-  S.gastos.filter((g) => enMes(g.fecha, m) && !g.ajuste).forEach((g) => filas.push({ ...g, origen: "manual" }));
-  const conAjuste = (r) => { const a = S.gastos.find((g) => g.ajuste && g.id === r.id); if (!a) return filas.push(r); if (a.excluido) return; filas.push({ ...r, categoria: a.categoria || r.categoria, descripcion: a.descripcion || r.descripcion, valor: a.valor ?? r.valor, potreroId: a.potreroId || null, editado: true, original: r.valor }); };
-  S.liquidaciones.filter((l) => enMes(l.hasta, m)).forEach((l) => {
+  const rango = (g) => (g.hasta && g.hasta > g.fecha ? ` · repartido ${fmt(g.fecha)} a ${fmt(g.hasta)}` : "");
+  S.gastos.filter((g) => !g.ajuste).forEach((g) => { const v = parteEnMes(g, m); if (v) filas.push({ ...g, valor: v, total: g.valor, reparto: rango(g), origen: "manual" }); });
+  const conAjuste = (r) => {
+    const a = S.gastos.find((g) => g.ajuste && g.id === r.id);
+    if (!a) { if (enMes(r.fecha, m)) filas.push(r); return; }
+    if (a.excluido) return;
+    const tot = a.valor ?? r.valor, v = parteEnMes({ fecha: r.fecha, hasta: a.hasta, valor: tot }, m);
+    if (v) filas.push({ ...r, categoria: a.categoria || r.categoria, descripcion: a.descripcion || r.descripcion, valor: v, total: tot, hasta: a.hasta, reparto: rango({ fecha: r.fecha, hasta: a.hasta }), potreroId: a.potreroId || null, editado: true, original: r.valor });
+  };
+  S.liquidaciones.filter((l) => enMes(l.hasta, m) || S.gastos.some((g) => g.ajuste && g.hasta && g.id.startsWith(`col-${l.id}-`))).forEach((l) => {
     (l.compras || []).forEach((c) => c.valor && conAjuste({ id: `col-${l.id}-${c.grupo}`, fecha: l.hasta, categoria: CAT_COLANTA(c.grupo), descripcion: `Agrocolanta sem. ${l.semana}: ${capital(c.grupo)}${c.kg ? ` (${nf(c.kg)} kg)` : ""}`, valor: c.valor, origen: "colanta" }));
     (l.deducciones || []).filter((d) => /FOMENTO/i.test(d.concepto)).forEach((d) => conAjuste({ id: `col-${l.id}-fomento`, fecha: l.hasta, categoria: "Cuotas y parafiscales", descripcion: `Cuota de fomento sem. ${l.semana}`, valor: d.valor, origen: "colanta" }));
   });
@@ -1133,12 +1154,13 @@ function vPlata() {
     </div>
     ${r.precioL && r.costoL != null ? `<div class="alerta ${r.costoL > r.precioL ? "bad" : r.costoL > r.precioL * 0.85 ? "" : "info"}"><span class="quien">${r.costoL > r.precioL ? "Está perdiendo plata con cada litro" : r.costoL > r.precioL * 0.85 ? "Margen apretado" : "Margen sano"}</span><span>Cada litro le cuesta ${pesos(r.costoL)} y se lo pagan a ${pesos(r.precioL)}. ${r.costoL > r.precioL ? "Revise abajo en qué se va la plata." : `Le quedan ${pesos(r.precioL - r.costoL)} por litro.`}</span></div>` : ""}
     ${panelRentabilidad()}
+    ${S.animales.length ? `<details class="panel"><summary class="row spread" style="cursor:pointer"><b>Valor del ganado, precios y descarte</b><span class="small muted">ver</span></summary><div style="margin-top:10px">${panelMercado()}</div></details>` : ""}
     <div class="panel stack"><h3>En qué se va la plata</h3>
       ${Object.keys(r.porCat).length ? Object.entries(r.porCat).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<div><div class="row spread small"><span>${esc(c)}</span><b class="num">${pesos(v)} · ${nf((v / r.gastos) * 100)}%</b></div><div class="qbar"><i style="width:${(v / maxCat) * 100}%;background:var(--brand)"></i></div></div>`).join("")
       : `<p class="muted small">Sin gastos este mes. Las compras en Agrocolanta se suman solas al cargar la liquidación.</p>`}
     </div>
     <div class="panel stack"><div class="row spread"><h3>Gastos del mes</h3><button class="btn ghost sm" id="pFijos" type="button">Fijos y mano de obra</button></div>
-      ${r.G.length ? `<div class="tablewrap"><table><tr><th>Fecha</th><th>Concepto</th><th class="r">Valor</th><th></th></tr>${r.G.map((g) => `<tr><td>${fmt(g.fecha)}</td><td>${esc(g.descripcion || g.categoria)}<br><span class="small muted">${esc(g.categoria)}${g.origen === "colanta" ? (g.editado ? " · de la liquidación, corregido" : " · de la liquidación") : g.origen === "fijo" ? " · fijo" : g.origen === "familiar" ? " · estimado" : ""}</span></td><td class="r">${pesos(g.valor)}</td><td>${g.origen === "manual" ? `<button class="btn ghost sm" type="button" data-g="${esc(g.id)}">Editar</button>` : g.origen === "colanta" ? `<button class="btn ghost sm" type="button" data-gc="${esc(g.id)}">Editar</button>` : ""}</td></tr>`).join("")}</table></div>` : `<p class="muted small">Nada registrado.</p>`}
+      ${r.G.length ? `<div class="tablewrap"><table><tr><th>Fecha</th><th>Concepto</th><th class="r">Valor</th><th></th></tr>${r.G.map((g) => `<tr><td>${fmt(g.fecha)}</td><td>${esc(g.descripcion || g.categoria)}<br><span class="small muted">${esc(g.categoria)}${g.reparto || ""}${g.origen === "colanta" ? (g.editado ? " · de la liquidación, corregido" : " · de la liquidación") : g.origen === "fijo" ? " · fijo" : g.origen === "familiar" ? " · estimado" : ""}</span></td><td class="r">${pesos(g.valor)}</td><td>${g.origen === "manual" ? `<button class="btn ghost sm" type="button" data-g="${esc(g.id)}">Editar</button>` : g.origen === "colanta" ? `<button class="btn ghost sm" type="button" data-gc="${esc(g.id)}">Editar</button>` : ""}</td></tr>`).join("")}</table></div>` : `<p class="muted small">Nada registrado.</p>`}
       ${(() => { const ex = S.gastos.filter((g) => g.ajuste && g.excluido && enMes(g.fecha, mesPlata)); return ex.length ? `<div class="small muted">No se cuentan: ${ex.map((g) => `${esc(g.descripcion || "compra de la liquidación")} (${pesos(g.valor)}) <button class="btn ghost sm" type="button" data-gr="${esc(g.id)}">Volver a contar</button>`).join(" · ")}</div>` : ""; })()}
     </div>
     <div class="panel stack"><h3>Últimos 6 meses</h3>
@@ -1156,6 +1178,8 @@ function vPlata() {
   $("#pFijos").onclick = formFijos;
   $("#pSim").onclick = formSimulador;
   const pc = $("#pControl"); if (pc) pc.onclick = formControlLechero;
+  const hp = $("#hPrecios", el); if (hp) hp.onclick = formPrecios;
+  $$(".panel .card[data-a]", el).forEach((b) => (b.onclick = () => detalle(b.dataset.a)));
   $$("tr[data-a]", el).forEach((tr) => (tr.onclick = () => hojaVida(tr.dataset.a)));
   $("#pPrecios").onclick = formPrecios;
   $$("[data-g]", el).forEach((b) => (b.onclick = () => formGasto(S.gastos.find((g) => g.id === b.dataset.g))));
@@ -1165,6 +1189,7 @@ function vPlata() {
 
 function formGasto(g, pre = {}, opt = {}) {
   const x = { fecha: hoy(), categoria: CATS[0], ...pre, ...(g || {}) };
+  if (x.total != null) x.valor = x.total;
   if (opt.colanta && !CATS.includes(x.categoria)) x.categoria = CATS[0];
   sheet(cab(opt.colanta ? "Gasto de la liquidación" : g ? "Editar gasto" : "Nuevo gasto") + (opt.colanta ? `<p class="small muted">Viene de la liquidación de Colanta${x.original != null && x.original !== x.valor ? ` (decía ${pesos(x.original)})` : ""}. Puede corregir el valor, la categoría o la descripción, o dejar de contarlo si no fue un gasto de la finca.</p>` : "") + `
     <form id="fG" class="stack">
@@ -1173,6 +1198,9 @@ function formGasto(g, pre = {}, opt = {}) {
         <label class="f">Valor ($)<input class="big" id="gV" inputmode="numeric" value="${x.valor ? nf(x.valor) : ""}" placeholder="0" required></label>
         <label class="f">Fecha<input type="date" id="gF" value="${x.fecha}" max="${hoy()}"${opt.colanta ? " disabled" : ""}></label>
         <label class="f full">Descripción<input id="gD" value="${esc(x.descripcion || "")}" placeholder="Ej. 10 bultos de concentrado"></label>
+        <label class="f full">¿Alcanza para varios meses? Hasta cuándo (opcional)<input type="date" id="gH" value="${esc(x.hasta || "")}"></label>
+        <p class="small muted full" style="margin-top:-6px">Si pone la fecha en que se acaba (aunque sea aproximada), el gasto se reparte por días entre los meses. Cuando se acabe de verdad, toque "Se acabó hoy".</p>
+        ${x.hasta && x.hasta > hoy() ? `<button class="btn ghost full" type="button" id="gAcabo">Se acabó hoy (${fmt(hoy())})</button>` : ""}
         ${S.potreros.length ? `<label class="f full">Potrero (opcional)<select id="gP"><option value="">Ninguno</option>${S.potreros.map((p) => `<option value="${esc(p.id)}"${x.potreroId === p.id ? " selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select></label>` : ""}
       </div>
       <button class="btn" type="submit">Guardar gasto</button>
@@ -1184,9 +1212,13 @@ function formGasto(g, pre = {}, opt = {}) {
     $("#fG", s).onsubmit = (ev) => { ev.preventDefault();
       const valor = pint($("#gV", s).value); if (!valor) return toast("Escriba el valor del gasto");
       const p = $("#gP", s);
-      if (opt.colanta) return guardarYcerrar(() => save("gastos", { id: g.id, ajuste: true, fecha: g.fecha, categoria: cat, descripcion: $("#gD", s).value.trim(), valor, potreroId: p && p.value ? p.value : null }), "Gasto corregido");
-      guardarYcerrar(() => save("gastos", { id: g ? g.id : uid(), fecha: $("#gF", s).value, categoria: cat, descripcion: $("#gD", s).value.trim(), valor, potreroId: p && p.value ? p.value : null }), "Gasto guardado");
+      const fch = opt.colanta ? g.fecha : $("#gF", s).value, hasta = $("#gH", s).value || null;
+      if (hasta && hasta <= fch) return toast("La fecha hasta la que alcanza debe ser después de la compra");
+      const rep = hasta ? { hasta } : {};
+      if (opt.colanta) return guardarYcerrar(() => save("gastos", { id: g.id, ajuste: true, fecha: g.fecha, categoria: cat, descripcion: $("#gD", s).value.trim(), valor, potreroId: p && p.value ? p.value : null, ...rep }), hasta ? "Gasto repartido" : "Gasto corregido");
+      guardarYcerrar(() => save("gastos", { id: g ? g.id : uid(), fecha: fch, categoria: cat, descripcion: $("#gD", s).value.trim(), valor, potreroId: p && p.value ? p.value : null, ...rep }), hasta ? "Gasto guardado y repartido" : "Gasto guardado");
     };
+    const ac = $("#gAcabo", s); if (ac) ac.onclick = () => { $("#gH", s).value = hoy() > x.fecha ? hoy() : ""; $("#fG", s).requestSubmit ? $("#fG", s).requestSubmit() : $("#fG", s).dispatchEvent(new Event("submit", { cancelable: true })); };
     const ex = $("#gExc", s); if (ex) ex.onclick = function () { confirmar(this, "Toque otra vez: no se contará en los gastos", () => guardarYcerrar(() => save("gastos", { id: g.id, ajuste: true, excluido: true, fecha: g.fecha, descripcion: g.descripcion, valor: g.valor }), "Ese gasto ya no se cuenta")); };
     const og = $("#gOrig", s); if (og) og.onclick = () => guardarYcerrar(() => del("gastos", g.id), "Quedó como venía en la liquidación");
     const d = $("#gDel", s); if (d) d.onclick = function () { confirmar(this, "Toque otra vez para eliminar", () => guardarYcerrar(() => del("gastos", g.id), "Gasto eliminado")); };
@@ -1977,6 +2009,7 @@ async function conectarFinca(f, modo) {
   // modo: "subir" (esta finca local va a la nube), "bajar" (reemplazar lo local con lo de la nube)
   if (modo === "bajar") await vaciarTodo(CONFIG_LOCAL);
   await guardarNube({ fincaId: f.id, fincaNombre: f.nombre, rol: f.rol, email: sesion && sesion.email, ultimoPull: null, error: null });
+  try { localStorage.setItem("hc-visto-" + f.id, new Date().toISOString()); } catch (e) {}
   if (modo === "subir") await encolarTodo();
   await sincronizar({ silencioso: false });
 }
@@ -2003,13 +2036,14 @@ function panelNube() {
       <button class="btn" type="button" id="nuSync">Sincronizar ahora</button>
       ${n.rol === "dueno" ? `<button class="btn ghost" type="button" id="nuInvitar">Invitar a alguien</button>` : ""}
       <button class="btn ghost" type="button" id="nuMiembros">Ver quiénes están</button>
+      <button class="btn ghost" type="button" id="nuCambiar">Cambiar de finca o agregar otra</button>
       <button class="btn ghost" type="button" id="nuSalir">Salir de la cuenta</button>
       <p class="small muted">${esc(sesion.email)}</p></div>`;
 }
 function enlazarNube(el) {
   const b = (id, fn) => { const x = $(id, el); if (x) x.onclick = fn; };
   b("#nuEntrar", formEntrar); b("#nuFinca", elegirFinca); b("#nuSync", async () => { const c = await sincronizar({ silencioso: false }); toast(c ? `${c} cambios recibidos` : "Todo al día"); });
-  b("#nuInvitar", formInvitar); b("#nuMiembros", verMiembros);
+  b("#nuInvitar", formInvitar); b("#nuMiembros", verMiembros); b("#nuCambiar", cambiarFinca);
   b("#nuSalir", async function () { confirmar(this, "Toque otra vez para salir", async () => { try { await (await remoto()).salir(); } catch (e) {} sesion = null; await guardarNube({ fincaId: null, fincaNombre: "", rol: null, ultimoPull: null }); if (!memOnly) await tx("cola", "readwrite", (st) => st.clear()); toast("Salió de la cuenta. Los datos siguen en este celular."); render(); }); });
 }
 function formEntrar() {
@@ -2105,7 +2139,7 @@ function gananciaAnimal(an, objetivoLote) {
 }
 function alertasCarne() {
   const out = [], c = cfgCarne();
-  S.animales.filter(esCarne).forEach((an) => {
+  S.animales.filter((a) => esCarne(a) && enSel(a)).forEach((an) => {
     const g = gananciaAnimal(an), nom = `<span class="quien">${esc(an.arete)}${an.nombre ? " · " + esc(an.nombre) : ""}</span>`;
     if (g.listo) out.push({ k: "info", o: 13, h: `${nom}<span>Llegó al peso objetivo (${nf(g.objetivo)} kg; va en unos ${nf(g.pesoHoy)} kg). Ya lo puede vender.</span>` });
     else if (g.gdp != null && g.gdp < c.gdpMin && g.p.length >= 2) out.push({ k: "", o: 14, h: `${nom}<span>Está ganando solo ${nf(g.gdp)} g por día entre los dos últimos pesajes. Revise parásitos, comida y salud.</span>` });
@@ -2113,12 +2147,14 @@ function alertasCarne() {
   return out;
 }
 function vCarne(el) {
-  const c = cfgCarne(), lote = S.animales.filter(esCarne).sort(porArete);
+  const c = cfgCarne(), lote = S.animales.filter((a) => esCarne(a) && enSel(a)).sort(porArete);
   const plata = puedeVerPlata(); const filas = lote.map((an) => ({ an, g: gananciaAnimal(an), v: plata ? valorAnimal(an) : null }));
   const conGdp = filas.filter((f) => f.g.ritmo != null);
   const gdpLote = conGdp.length ? avg(conGdp.map((f) => f.g.ritmo)) : null;
   const kgMes = conGdp.reduce((s, f) => s + (f.g.ritmo / 1000) * 30, 0);
   const pGordo = precioKg("gordo");
+  const cons = consumoCeba(), kgDiaLote = conGdp.reduce((s, f) => s + f.g.ritmo / 1000, 0);
+  const conv = cons.kgDia && kgDiaLote ? cons.kgDia / kgDiaLote : null, costoKg = conv && cons.precioKg ? conv * cons.precioKg : null;
   el.innerHTML = `
     <div class="row spread"><h2>Levante y ceba · ${lote.length}</h2><button class="btn sm" id="caPesar" type="button" ${lote.length ? "" : "disabled"}>Pesar lote</button></div>
     ${lote.length ? `<div class="kpis">
@@ -2127,20 +2163,45 @@ function vCarne(el) {
       <div class="kpi"><span class="eyebrow">Listos para vender</span><b>${filas.filter((f) => f.g.listo).length}</b><span class="small muted">objetivo ${nf(c.pesoObjetivo)} kg</span></div>
       ${plata ? `<div class="kpi"><span class="eyebrow">Valor del lote</span><b>${pesos(filas.reduce((s, f) => s + (f.v ? f.v.valor : 0), 0))}</b><span class="small muted">${filas.filter((f) => f.g.sinPesar).length ? filas.filter((f) => f.g.sinPesar).length + " sin pesar" : "con pesos medidos"}</span></div>` : ""}
     </div>
+    <div class="panel stack"><div class="row spread"><h3>Alimento</h3><button class="btn ghost sm" id="caAli" type="button">${cons.kgDia ? "Cambiar" : "Registrar consumo"}</button></div>
+      ${cons.kgDia ? `<div class="kpis">
+        <div class="kpi"><span class="eyebrow">Consumo diario</span><b>${nf(cons.kgDia)} kg</b><span class="small muted">${lote.length ? nf(cons.kgDia / lote.length, 1) + " kg por animal" : "&nbsp;"}</span></div>
+        <div class="kpi"><span class="eyebrow">Comida por kilo ganado</span><b>${conv ? nf(conv, 1) + " kg" : "–"}</b><span class="small muted">${conv ? "de alimento por cada kg que suben" : "falta pesar dos veces"}</span></div>
+        ${plata ? `<div class="kpi"><span class="eyebrow">Costo por kilo ganado</span><b style="color:var(${costoKg && pGordo ? (costoKg < pGordo.v ? "--ok" : "--bad") : "--fg"})">${costoKg ? pesos(costoKg) : "–"}</b><span class="small muted">${costoKg && pGordo ? (costoKg < pGordo.v ? "menos" : "más") + " de lo que pagan el kg en pie (" + pesos(pGordo.v) + ")" : cons.precioKg ? "&nbsp;" : "ponga el precio del alimento"}</span></div>
+        <div class="kpi"><span class="eyebrow">Alimento al mes</span><b>${cons.precioKg ? pesos(cons.kgDia * cons.precioKg * 30) : "–"}</b><span class="small muted">${nf(cons.kgDia * 30)} kg al mes</span></div>` : ""}
+      </div>` : `<p class="small muted">Anote cuántos kilos de alimento (concentrado, silo, heno…) le dan al día a todo el lote. Con eso la app calcula cuánta comida se necesita por cada kilo que suben${plata ? " y cuánto cuesta cada kilo ganado" : ""}.</p>`}
+    </div>
     <div class="panel stack"><div class="row spread"><h3>Por animal</h3><button class="btn ghost sm" id="caCfg" type="button">Metas</button></div>
-      <div class="tablewrap"><table><tr><th>Animal</th><th class="r">Último peso</th><th class="r">Gana/día</th><th class="r">Hoy ≈</th><th>Sale</th>${plata ? '<th class="r">Valor</th>' : ""}</tr>
+      <div class="tablewrap"><table><tr><th>Animal</th><th class="r">Peso actual</th><th class="r">Gana/día</th>${cons.kgDia ? '<th class="r">Come/día</th>' : ""}<th class="r">Hoy ≈</th><th>Sale</th>${plata ? '<th class="r">Valor</th>' : ""}</tr>
       ${filas.map(({ an, g, v }) => `<tr data-a="${esc(an.arete)}" style="cursor:pointer"><td><span class="tag">${esc(an.arete)}</span> ${esc(an.nombre || "")}<br><span class="small muted">${esc(an.sexo === "M" ? "Macho" : "Hembra")} · ${edadTxt(an.nacimiento)}</span></td>
         <td class="r">${g.ult ? nf(g.ult.kg) + " kg<br><span class='small muted'>" + fmt(g.ult.fecha) + "</span>" : "<span class='muted'>sin pesar</span>"}</td>
         <td class="r" style="color:var(${g.gdp != null && g.gdp < c.gdpMin ? "--bad" : "--fg"})">${g.gdp != null ? nf(g.gdp) + " g" : g.gdpTotal != null ? nf(g.gdpTotal) + " g" : "–"}</td>
+        ${cons.kgDia ? `<td class="r">${nf(cons.kgDia / lote.length, 1)} kg</td>` : ""}
         <td class="r">${g.pesoHoy != null ? nf(g.pesoHoy) + " kg" : "–"}</td>
         <td>${g.listo ? '<span class="chip pren">Listo</span>' : g.fechaSalida ? fmt(g.fechaSalida) : "–"}</td>
         ${plata ? `<td class="r">${v ? pesos(v.valor) : "–"}</td>` : ""}</tr>`).join("")}
       </table></div>
       <p class="small muted">"Gana/día" es la ganancia entre los dos últimos pesajes. "Hoy ≈" y la fecha de salida se proyectan con ese ritmo hasta el peso objetivo. Pese cada 30 días, con báscula o cinta, para que el cálculo sea confiable.</p>
     </div>` : `<div class="empty">Aquí aparecen los machos, novillos y animales marcados como de carne o en levante y ceba. Póngales "Levante / ceba" como estado o "Carne" como propósito en la ficha.</div>`}`;
-  const b = $("#caPesar", el); if (b) b.onclick = () => formPesajeLote();
+  const b = $("#caPesar", el); if (b) b.onclick = () => formPesajeLote(lote);
+  const ali = $("#caAli", el); if (ali) ali.onclick = formConsumoCeba;
   const cf = $("#caCfg", el); if (cf) cf.onclick = formMetasCarne;
   $$("tr[data-a]", el).forEach((tr) => (tr.onclick = () => detalle(tr.dataset.a)));
+}
+const claveConsumo = () => (hatoValido() ? hatoSel : "todos");
+const consumoCeba = () => ({ kgDia: null, precioKg: null, ...((cfgCarne().consumo || {})[claveConsumo()] || {}) });
+function formConsumoCeba() {
+  const c = cfgCarne(), x = consumoCeba(), plata = puedeVerPlata();
+  sheet(cab("Alimento del lote") + `<form id="fCo" class="grid2">
+    <label class="f">Kilos de alimento al día (todo el lote)<input id="coK" inputmode="decimal" value="${x.kgDia ?? ""}" placeholder="Ej. 120"></label>
+    ${plata ? `<label class="f">Precio por kilo de alimento ($)<input id="coP" inputmode="numeric" value="${x.precioKg ?? ""}" placeholder="Ej. 1.800"></label>` : ""}
+    <p class="small muted full">Si son varios alimentos, sume los kilos y use el precio promedio. Un bulto de 40 kg a $72.000 son $1.800 por kilo.${hatoValido() ? ` Esto queda para ${esc(nombreHato(hatoSel))}.` : ""}</p>
+    <button class="btn full" type="submit">Guardar</button></form>`, (s) => {
+    $("#fCo", s).onsubmit = (ev) => { ev.preventDefault();
+      const kg = pn($("#coK", s).value), pi = $("#coP", s), pr = pi ? pint(pi.value) : x.precioKg;
+      guardarYcerrar(() => save("config", { ...c, consumo: { ...(c.consumo || {}), [claveConsumo()]: { kgDia: kg || null, precioKg: pr || null } } }), "Consumo guardado");
+    };
+  });
 }
 function formMetasCarne() {
   const c = cfgCarne();
@@ -2200,6 +2261,7 @@ function etiquetaEvento(e) {
   if (e.tipo === "servicio") return nombreServicio(e);
   if (e.tipo === "prenez") return `Palpación: cargada${e.meses ? " de " + mesesTxt(e.meses) : ""}`;
   if (e.tipo === "vacia") return "Palpación: vacía";
+  if (e.tipo === "movimiento") return `Pasó ${e.de ? "de " + (nombreHato(e.de) || "otro hato") + " " : ""}a ${nombreHato(e.a) || "su hato"}`;
   return TIPOS[e.tipo] || e.tipo;
 }
 function detalleEv(e) {
@@ -2252,7 +2314,7 @@ function hojaVida(arete) {
   const an = S.animales.find((a) => a.arete === arete); if (!an) return toast("No encontré el animal " + arete);
   const c = ciclo(an), ev = evDe(arete), h = hoy(), hembra = an.sexo !== "M";
   const partos = ev.filter((e) => e.tipo === "parto");
-  const repro = ev.filter((e) => ["servicio", "prenez", "vacia", "celo", "secado"].includes(e.tipo)).reverse();
+  const repro = ev.filter((e) => ["servicio", "prenez", "vacia", "celo", "secado"].includes(e.tipo)).reverse(), ruta = ev.filter((e) => e.tipo === "movimiento").reverse();
   const salud = ev.filter((e) => ["tratamiento", "vacuna", "salud", "obs"].includes(e.tipo)).reverse();
   const pesosEv = ev.filter((e) => e.tipo === "peso").reverse(), lecheEv = ev.filter((e) => e.tipo === "leche").reverse();
   const crias = S.animales.filter((a) => a.madre === arete).sort(porArete);
@@ -2265,7 +2327,7 @@ function hojaVida(arete) {
   const seccion = (titulo, lista, max = 12) => lista.length ? `<div class="panel stack"><span class="eyebrow">${titulo}</span><div class="timeline">${lista.slice(0, max).map(linea).join("")}</div>${lista.length > max ? `<span class="small muted">y ${lista.length - max} registros más antiguos</span>` : ""}</div>` : "";
   sheet(`<div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h2>${esc(nombreVisible(an))}</h2></div><button class="btn ghost sm" data-close type="button">Cerrar</button></div>
     ${foto ? `<button type="button" class="hv-foto" id="hvFoto" aria-label="Cambiar foto"><img src="${foto.img}" alt="Foto de ${esc(an.arete)}"></button>` : `<button type="button" class="hv-foto vacia" id="hvFoto">${ICONO_RES}<span>Agregar foto</span></button>`}
-    <div class="row spread"><span class="eyebrow">Hoja de vida</span><div>${chips(an, c)}</div></div>
+    <div class="row spread"><span class="eyebrow">Hoja de vida${hatosLista().length ? " · " + esc(textoHato(an)) : ""}</span><div>${chips(an, c)}</div></div>
     ${an.revisar ? `<div class="alerta"><span class="quien">Por revisar</span><span>${esc(an.revisar)}</span></div>` : ""}
     <div class="facts">
       <div>Estado<b>${esc(ESTADOS[an.estado] || an.estado)}</b></div><div>Edad<b>${edadTxt(an.nacimiento)}</b></div><div>Raza<b>${esc(an.raza || "–")}</b></div>
@@ -2287,6 +2349,7 @@ function hojaVida(arete) {
     </div>` : ""}
     ${seccion("Servicios y palpaciones", repro)}
     ${seccion("Salud, tratamientos y vacunas", salud)}
+    ${seccion("Por dónde ha estado", ruta, 10)}
     ${seccion("Control lechero", lecheEv, 6)}
     ${seccion("Pesajes", pesosEv, 6)}
     ${crias.length ? `<div class="panel stack"><span class="eyebrow">Crías · ${crias.length}</span><div class="opciones">${crias.map(tag).join("")}</div></div>` : ""}
@@ -2333,7 +2396,7 @@ function formBuscar() {
 /* palpación por lotes */
 function porPalpar() {
   const h = hoy();
-  return hembras().map((an) => {
+  return hembras().filter(enSel).map((an) => {
     const c = ciclo(an), est = estadoRepro(an, c);
     const ds = c.ultServ && (!c.ultParto || c.ultServ.fecha > c.ultParto) ? diff(h, c.ultServ.fecha) : null;
     let prio = 3;
@@ -2407,7 +2470,7 @@ function vRegistros(el) {
   const pintar = () => {
     const desde = diasReg ? add(hoy(), -diasReg) : "0000", t = sinTildes(buscaReg.trim().toLowerCase());
     const nom = new Map(S.animales.map((a) => [a.arete, a]));
-    const evs = S.eventos.filter((e) => e.fecha >= desde && (!filtroReg || grupoEv(e.tipo) === filtroReg) && (!t || sinTildes(String(e.arete).toLowerCase()).includes(t) || sinTildes(((nom.get(e.arete) || {}).nombre || "").toLowerCase()).includes(t)))
+    const evs = S.eventos.filter((e) => e.fecha >= desde && (!hatoValido() || (nom.get(e.arete) && enSel(nom.get(e.arete)))) && (!filtroReg || grupoEv(e.tipo) === filtroReg) && (!t || sinTildes(String(e.arete).toLowerCase()).includes(t) || sinTildes(((nom.get(e.arete) || {}).nombre || "").toLowerCase()).includes(t)))
       .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
     const est = new Map(), estado = (ar) => { if (!est.has(ar)) { const a = nom.get(ar); est.set(ar, a ? chips(a, ciclo(a)) : '<span class="chip">Ya no está</span>'); } return est.get(ar); };
     const MAX = 200, dias = []; let ult = null;
@@ -2440,7 +2503,7 @@ function vPeso(el) {
   return modoPeso === "levante" ? vLevante(c) : vCarne(c);
 }
 function vLevante(el) {
-  const c = cfgLevante(), lote = S.animales.filter(esLevante).sort(porArete);
+  const c = cfgLevante(), lote = S.animales.filter((a) => esLevante(a) && enSel(a)).sort(porArete);
   const filas = lote.map((an) => ({ an, g: gananciaAnimal(an, c.pesoServicio), m: edadMeses(an), serv: S.eventos.some((e) => e.arete === an.arete && e.tipo === "servicio") }));
   const con = filas.filter((f) => f.g.ritmo != null), prom = con.length ? avg(con.map((f) => f.g.ritmo)) : null;
   const bajo = con.filter((f) => f.g.gdp != null && f.g.gdp < c.metaGdp * 0.8).length;
@@ -2478,7 +2541,7 @@ function formMetasLevante() {
 }
 function alertasLevante() {
   const out = [], c = cfgLevante();
-  S.animales.filter(esLevante).forEach((an) => {
+  S.animales.filter((a) => esLevante(a) && enSel(a)).forEach((an) => {
     const g = gananciaAnimal(an, c.pesoServicio), m = edadMeses(an), nom = `<span class="quien">${esc(an.arete)}${an.nombre ? " · " + esc(an.nombre) : ""}</span>`;
     if (g.gdp != null && g.p.length >= 2 && g.gdp < c.metaGdp * 0.8) out.push({ k: "", o: 14, h: `${nom}<span>Gana ${nf(g.gdp)} g por día y la meta es ${nf(c.metaGdp)} g. Revise comida, parásitos y salud.</span>` });
     else if (g.listo && (m == null || m >= 13) && !S.eventos.some((e) => e.arete === an.arete && e.tipo === "servicio")) out.push({ k: "info", o: 13, h: `${nom}<span>Ya tiene unos ${nf(g.pesoHoy)} kg${m != null ? ` y ${Math.floor(m)} meses` : ""}: está lista para el primer servicio.</span>` });
@@ -2626,6 +2689,142 @@ function opcionesFoto(an, alTerminar) {
     $("#foGal", s).onclick = () => pedirFoto(an, alTerminar, false);
     const d = $("#foDel", s); if (d) d.onclick = function () { confirmar(this, "Toque otra vez para quitarla", async () => { await del("fotos", f.id); toast("Foto quitada"); render(); alTerminar ? alTerminar() : cerrar(); }); };
   });
+}
+/* ---------- hatos o lotes dentro de la finca ---------- */
+const cfgHatos = () => ({ lista: [], ...(S.config.find((c) => c.id === "hatos") || {}), id: "hatos" });
+const hatosLista = () => cfgHatos().lista || [];
+let hatoSel = (() => { try { return localStorage.getItem("hc-hato") || ""; } catch (e) { return ""; } })();
+const lugarDe = (a) => a.lugar || a.hato || "";
+const nombreHato = (id) => (hatosLista().find((h) => h.id === id) || {}).nombre || "";
+const hatoValido = () => hatoSel && hatosLista().some((h) => h.id === hatoSel);
+const enSel = (a) => !hatoValido() || lugarDe(a) === hatoSel;
+const fueraDeSel = (a) => hatoValido() && a.hato === hatoSel && a.lugar && a.lugar !== hatoSel && a.estado !== "vendida";
+function elegirHato(id) { hatoSel = id; try { localStorage.setItem("hc-hato", id); } catch (e) {} filtroHato = ""; render(); }
+function barraHatos() {
+  const L = hatosLista(); if (!L.length) return "";
+  const cuenta = (id) => S.animales.filter((a) => a.estado !== "vendida" && lugarDe(a) === id).length;
+  return `<div class="chips barra-hatos"><button class="chipbtn" type="button" data-hs="" aria-pressed="${!hatoValido()}">Toda la finca</button>${L.map((h) => `<button class="chipbtn" type="button" data-hs="${esc(h.id)}" aria-pressed="${hatoSel === h.id}">${esc(h.nombre)} · ${cuenta(h.id)}</button>`).join("")}<button class="chipbtn" type="button" data-hcfg aria-label="Organizar hatos">⚙</button></div>`;
+}
+function enlazarBarraHatos(el) {
+  $$("[data-hs]", el).forEach((b) => (b.onclick = () => elegirHato(b.dataset.hs)));
+  const c = $("[data-hcfg]", el); if (c) c.onclick = formHatos;
+}
+function formHatos() {
+  const L = hatosLista().map((h) => ({ ...h }));
+  const pintar = (s) => {
+    $("#hxLista", s).innerHTML = L.length ? L.map((h, i) => `<div class="row" style="gap:8px;flex-wrap:nowrap"><input value="${esc(h.nombre)}" data-hn="${i}" style="flex:1" aria-label="Nombre del hato"><span class="small muted" style="white-space:nowrap">${S.animales.filter((a) => a.estado !== "vendida" && (a.hato === h.id || a.lugar === h.id)).length} animales</span><button class="btn ghost sm" type="button" data-hx="${i}">Quitar</button></div>`).join("") : `<p class="small muted">Todavía no hay hatos. Si toda la finca es un solo hato, no hace falta crear ninguno.</p>`;
+    $$("[data-hn]", s).forEach((i) => (i.oninput = () => (L[i.dataset.hn].nombre = i.value)));
+    $$("[data-hx]", s).forEach((b) => (b.onclick = () => { L.splice(Number(b.dataset.hx), 1); pintar(s); }));
+  };
+  sheet(cab("Hatos o lotes") + `<p class="small muted">Sirven para separar grupos de la misma finca: por ejemplo Hato 1, Hato 2, Secas, Toros de engorde. Cada animal pertenece a un hato y puede estar temporalmente en otro (una vaca del Hato 1 que está con las secas).</p>
+    <div id="hxLista" class="stack"></div>
+    <div class="row" style="gap:8px;flex-wrap:nowrap"><input id="hxNuevo" placeholder="Ej. Hato 2, Secas, Toros de engorde" style="flex:1" autocomplete="off"><button class="btn ghost" type="button" id="hxAdd">Agregar</button></div>
+    <button class="btn" type="button" id="hxOk">Guardar</button>
+    ${hatosLista().length ? `<button class="btn ghost" type="button" id="hxMover">Asignar o mover animales</button>` : ""}`, (s) => {
+    pintar(s);
+    $("#hxAdd", s).onclick = () => { const n = $("#hxNuevo", s).value.trim(); if (!n) return; L.push({ id: "h" + uid(), nombre: n }); $("#hxNuevo", s).value = ""; pintar(s); };
+    $("#hxOk", s).onclick = async () => {
+      const lista = L.map((h) => ({ id: h.id, nombre: h.nombre.trim() || "Sin nombre" })), ids = new Set(lista.map((h) => h.id));
+      const nueva = hatosLista().length === 0 && lista.length > 0;
+      await guardarYcerrar(async () => {
+        await save("config", { ...cfgHatos(), lista });
+        for (const a of S.animales.filter((x) => (x.hato && !ids.has(x.hato)) || (x.lugar && !ids.has(x.lugar)))) { const n = { ...a }; if (!ids.has(n.hato)) delete n.hato; if (!ids.has(n.lugar)) delete n.lugar; await save("animales", n); }
+      }, "Hatos guardados");
+      if (nueva) formMover({ nuevo: true });
+    };
+    const mv = $("#hxMover", s); if (mv) mv.onclick = () => formMover();
+  });
+}
+function formMover(pre = {}) {
+  const L = hatosLista(); if (!L.length) return formHatos();
+  const lista = S.animales.filter((a) => a.estado !== "vendida").sort(porArete);
+  const selA = selectorAnimales(lista, { multi: true, atajos: true, sel: pre.animales || [] });
+  sheet(cab(pre.nuevo ? "¿Qué animales van en cada hato?" : "Mover animales") + `
+    ${pre.nuevo ? `<p class="small muted">Elija los animales y el hato al que pertenecen. Repita para cada hato.</p>` : ""}
+    <form id="fMv" class="stack">
+      <div><span class="small muted" style="font-weight:700">Animales (puede elegir varios)</span>${selA.html}</div>
+      <label class="f">Para dónde van<select id="mvA">${L.map((h) => `<option value="${esc(h.id)}"${hatoSel === h.id ? " selected" : ""}>${esc(h.nombre)}</option>`).join("")}<option value="__casa">De vuelta a su propio hato</option></select></label>
+      <div class="opciones"><button type="button" class="chipbtn" data-mt="temp" aria-pressed="${!pre.nuevo}">Solo por un tiempo (siguen siendo de su hato)</button><button type="button" class="chipbtn" data-mt="perm" aria-pressed="${!!pre.nuevo}">Ahora pertenecen a ese hato</button></div>
+      <label class="f">Fecha<input type="date" id="mvF" value="${hoy()}" max="${hoy()}"></label>
+      <label class="f">Nota (opcional)<input id="mvN" placeholder="Ej. se secaron, pasan al lote de secas"></label>
+      <button class="btn" type="submit">Mover</button>
+    </form>`, (s) => {
+    selA.init(s);
+    let modo = pre.nuevo ? "perm" : "temp";
+    $$("[data-mt]", s).forEach((b) => (b.onclick = () => { modo = b.dataset.mt; $$("[data-mt]", s).forEach((x) => x.setAttribute("aria-pressed", x === b)); }));
+    $("#fMv", s).onsubmit = (ev) => { ev.preventDefault();
+      const aretes = selA.get(); if (!aretes.length) return toast("Elija al menos un animal");
+      const dest = $("#mvA", s).value, f = $("#mvF", s).value || hoy(), nota = $("#mvN", s).value.trim();
+      guardarYcerrar(async () => {
+        for (const ar of aretes) {
+          const a = S.animales.find((x) => x.arete === ar); if (!a) continue;
+          const de = lugarDe(a), n = { ...a };
+          if (dest === "__casa") delete n.lugar;
+          else if (modo === "perm" || !n.hato) { n.hato = dest; delete n.lugar; }
+          else n.lugar = dest === n.hato ? undefined : dest;
+          if (n.lugar === undefined) delete n.lugar;
+          const a2 = lugarDe(n); if (a2 === de && n.hato === a.hato) continue;
+          await save("animales", n);
+          await save("eventos", { id: uid(), arete: ar, tipo: "movimiento", fecha: f, de: de || null, a: a2 || null, nota });
+        }
+      }, `${aretes.length} ${aretes.length === 1 ? "animal movido" : "animales movidos"}`);
+    };
+  });
+}
+const textoHato = (a) => { if (!hatosLista().length) return ""; const h = nombreHato(a.hato), l = a.lugar && a.lugar !== a.hato ? nombreHato(a.lugar) : ""; return h ? h + (l ? ` (ahora en ${l})` : "") : l || "Sin hato"; };
+
+/* ---------- novedades: lo que registraron otros ---------- */
+function claveVisto() { return "hc-visto-" + (nubeCfg().fincaId || "local"); }
+function novedades() {
+  if (!nubeActiva()) return [];
+  let visto = null; try { visto = localStorage.getItem(claveVisto()); } catch (e) {}
+  if (!visto) { try { localStorage.setItem(claveVisto(), new Date().toISOString()); } catch (e) {} return []; }
+  const yo = quienSoy();
+  return S.eventos.filter((e) => e.creado && e.por && e.por !== yo && e.creado > visto).sort((a, b) => (a.creado < b.creado ? 1 : -1));
+}
+function panelNovedades() {
+  const nv = novedades(); if (!nv.length) return "";
+  const nom = (ar) => { const a = S.animales.find((x) => x.arete === ar); return `${esc(ar)}${a && a.nombre ? " · " + esc(a.nombre) : ""}`; };
+  return `<div class="panel stack" style="border-color:var(--brand)"><div class="row spread"><h3>Novedades · ${nv.length}</h3><button class="btn ghost sm" type="button" id="nvOk">Entendido</button></div>
+    <div class="timeline">${nv.slice(0, 8).map((e) => `<div><b>${nom(e.arete)}</b> · ${esc(etiquetaEvento(e))}${detalleEv(e) ? `<br><span class="small muted">${esc(detalleEv(e))}</span>` : ""}</div>`).join("")}</div>
+    ${nv.length > 8 ? `<button class="btn ghost sm" type="button" id="nvMas">Ver las ${nv.length} en Registros</button>` : ""}</div>`;
+}
+function enlazarNovedades(el) {
+  const ok = $("#nvOk", el); if (ok) ok.onclick = () => { try { localStorage.setItem(claveVisto(), new Date().toISOString()); } catch (e) {} render(); };
+  const m = $("#nvMas", el); if (m) m.onclick = () => { subHato = "registros"; setVista("hato"); };
+}
+
+/* ---------- cambiar de finca o agregar otra ---------- */
+async function cambiarFinca() {
+  if (navigator.onLine === false) return toast("Necesita señal para cambiar de finca");
+  toast("Guardando lo pendiente en la nube…");
+  await sincronizar({ silencioso: false });
+  if ((await leerCola()).length) return toast("Hay registros sin enviar. Intente cuando tenga buena señal.");
+  let fincas = []; try { fincas = await (await remoto()).misFincas(); } catch (e) { return toast("No se pudo consultar: " + e.message); }
+  const n = nubeCfg(), otras = fincas.filter((f) => f.id !== n.fincaId);
+  sheet(cab("Cambiar de finca") + `<p class="small muted">Todo lo de "${esc(n.fincaNombre)}" ya está guardado en la nube. Al cambiar, este celular muestra la otra finca, y puede volver cuando quiera.</p>
+    ${otras.length ? `<div class="stack"><span class="eyebrow">Sus otras fincas</span>${otras.map((f, i) => `<button class="card" type="button" data-cf="${i}"><b>${esc(f.nombre)}</b><span class="small muted">${esc(ROLES[f.rol] || f.rol)}</span></button>`).join("")}</div>` : ""}
+    <div class="panel stack"><span class="eyebrow">Agregar otra finca</span>
+      <label class="f">Nombre de la finca nueva<input id="cfNom" placeholder="Ej. La Esperanza" autocomplete="off"></label>
+      <button class="btn ghost" type="button" id="cfNueva">Crear finca nueva</button></div>`, (s) => {
+    $$("[data-cf]", s).forEach((b) => (b.onclick = () => { const f = otras[b.dataset.cf]; hatoSel = ""; guardarYcerrar(() => conectarFinca(f, "bajar"), `Ahora está en ${f.nombre}`); }));
+    $("#cfNueva", s).onclick = async () => {
+      const nom = $("#cfNom", s).value.trim(); if (!nom) return toast("Escriba el nombre de la finca");
+      try {
+        const id = await (await remoto()).crearFinca(nom); hatoSel = "";
+        guardarYcerrar(async () => { await vaciarTodo(CONFIG_LOCAL); await save("config", { ...cfg(), nombre: nom }); await conectarFinca({ id, nombre: nom, rol: "dueno" }, "subir"); }, `Finca "${nom}" creada`);
+      } catch (e) { toast("No se pudo crear: " + e.message); }
+    };
+  });
+}
+
+/* ---------- gastos repartidos en el tiempo ---------- */
+function parteEnMes(g, m) {
+  if (!g.hasta || g.hasta <= g.fecha) return enMes(g.fecha, m) ? g.valor : 0;
+  const ini = m + "-01", fin = add(mesMas(m, 1) + "-01", -1);
+  const total = diff(g.hasta, g.fecha) + 1, desde = g.fecha > ini ? g.fecha : ini, hasta = g.hasta < fin ? g.hasta : fin;
+  const dias = diff(hasta, desde) + 1;
+  return dias > 0 ? Math.round((g.valor * dias) / total) : 0;
 }
 /* ---------- exportar y copias ---------- */
 function descargar(nombre, blob) {

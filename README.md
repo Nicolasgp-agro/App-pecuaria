@@ -14,9 +14,11 @@ Requisitos una sola vez: repositorio público y **Settings → Pages → Source:
 
 Al publicar una versión nueva hay que cambiar `VERSION` en `sw.js`; así los celulares que ya la tienen instalada reciben el aviso "Hay una versión nueva".
 
-## Qué hace (versión 2.4)
+## Qué hace (versión 2.8)
 
 - **Hato:** fichas, ciclos reproductivos, peso con cinta, valor y candidatas a descarte, buscador.
+- **Hatos o lotes:** varios hatos en la misma finca, animales con hato propio y ubicación actual, movimientos en lote y ruta en la hoja de vida.
+- **Varias fincas** con el mismo correo y **novedades** de lo que registran los demás.
 - **Palpación:** jornada de palpación vaca por vaca (cargada con meses o vacía), también dictada; los meses calculan el parto probable.
 - **Hoja de vida** de cada animal: padres, partos, servicios, palpaciones, salud, pesos y crías; se abre diciendo el número y se envía por WhatsApp.
 - **Registros:** todo lo que se ha registrado, por fecha, con la vaca, qué se hizo, su estado y quién lo registró.

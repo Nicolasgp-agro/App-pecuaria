@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.5.0";
+const APP_VERSION = "2.5.1";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -2571,10 +2571,11 @@ function restaurar(file) {
       const nuevos = (c) => (d.datos[c] || []).filter((o) => o && o.id && !S[c].some((x) => x.id === o.id));
       const na = nuevos("animales"), ne = nuevos("eventos");
       return sheet(cab("Cargar datos de la finca") + `<p>${esc(d.origen || "Datos para cargar")}.</p>
-        <div class="facts small muted"><div>Animales nuevos<b>${na.length}</b></div><div>Registros nuevos<b>${ne.length}</b></div><div>Ya estaban<b>${(d.datos.animales || []).length - na.length}</b></div></div>
+        <div class="facts small muted"><div>Animales activos<b>${na.filter((a) => a.estado !== "vendida").length}</b></div><div>Ya no están<b>${na.filter((a) => a.estado === "vendida").length}</b></div><div>Registros<b>${ne.length}</b></div></div>
+        ${na.some((a) => a.estado === "vendida") ? `<p class="muted small">Los que "ya no están" no tienen registros recientes: quedan como Vendida / descarte con su historia y no se cuentan en el hato. Si alguno sigue en la finca, cámbiele el estado en su ficha.</p>` : ""}
         <p class="muted small">Se agregan a lo que ya tiene en este celular. No se borra nada. Los animales con dudas quedan marcados "Por revisar".</p>
-        <button class="btn" type="button" id="iOk">Cargar ${na.length} animales</button>`,
-        (s) => ($("#iOk", s).onclick = () => guardarYcerrar(async () => { for (const c of COLS) for (const o of nuevos(c)) await save(c, o); }, `${na.length} animales y ${ne.length} registros cargados`)));
+        <button class="btn" type="button" id="iOk">Cargar</button>`,
+        (s) => ($("#iOk", s).onclick = () => guardarYcerrar(async () => { for (const c of COLS) for (const o of nuevos(c)) await save(c, o); }, `Cargados: ${na.filter((a) => a.estado !== "vendida").length} animales activos y ${ne.length} registros`)));
     }
     sheet(cab("Restaurar copia") + `<p>Copia del ${esc(new Date(d.fecha).toLocaleDateString("es-CO"))} con ${(d.datos.animales || []).length} animales y ${(d.datos.entregas || []).length} entregas.</p><p class="muted">Lo que hay ahora en este celular se reemplaza por la copia.</p><button class="btn danger" type="button" id="rOk">Reemplazar mis datos</button>`,
       (s) => ($("#rOk", s).onclick = () => guardarYcerrar(async () => { await vaciarTodo(); for (const c of COLS) for (const o of d.datos[c] || []) if (o && o.id) await save(c, o); }, "Copia restaurada")));

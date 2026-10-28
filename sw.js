@@ -1,6 +1,6 @@
 // Hato Claro — service worker: guarda la app en el celular para usarla sin señal.
 // Cambia VERSION en cada publicación para que los celulares reciban la actualización.
-const VERSION = "hc-2026-10-27-8";
+const VERSION = "hc-2026-10-27-9";
 const ARCHIVOS = [
   "./",
   "./index.html",

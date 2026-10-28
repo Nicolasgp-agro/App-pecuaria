@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.6.0";
+const APP_VERSION = "2.6.1";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -1084,10 +1084,11 @@ function ingresoLecheMes(m) {
 }
 function gastosMes(m) {
   const filas = [];
-  S.gastos.filter((g) => enMes(g.fecha, m)).forEach((g) => filas.push({ ...g, origen: "manual" }));
+  S.gastos.filter((g) => enMes(g.fecha, m) && !g.ajuste).forEach((g) => filas.push({ ...g, origen: "manual" }));
+  const conAjuste = (r) => { const a = S.gastos.find((g) => g.ajuste && g.id === r.id); if (!a) return filas.push(r); if (a.excluido) return; filas.push({ ...r, categoria: a.categoria || r.categoria, descripcion: a.descripcion || r.descripcion, valor: a.valor ?? r.valor, potreroId: a.potreroId || null, editado: true, original: r.valor }); };
   S.liquidaciones.filter((l) => enMes(l.hasta, m)).forEach((l) => {
-    (l.compras || []).forEach((c) => c.valor && filas.push({ id: `col-${l.id}-${c.grupo}`, fecha: l.hasta, categoria: CAT_COLANTA(c.grupo), descripcion: `Agrocolanta sem. ${l.semana}: ${capital(c.grupo)}${c.kg ? ` (${nf(c.kg)} kg)` : ""}`, valor: c.valor, origen: "colanta" }));
-    (l.deducciones || []).filter((d) => /FOMENTO/i.test(d.concepto)).forEach((d) => filas.push({ id: `col-${l.id}-fomento`, fecha: l.hasta, categoria: "Cuotas y parafiscales", descripcion: `Cuota de fomento sem. ${l.semana}`, valor: d.valor, origen: "colanta" }));
+    (l.compras || []).forEach((c) => c.valor && conAjuste({ id: `col-${l.id}-${c.grupo}`, fecha: l.hasta, categoria: CAT_COLANTA(c.grupo), descripcion: `Agrocolanta sem. ${l.semana}: ${capital(c.grupo)}${c.kg ? ` (${nf(c.kg)} kg)` : ""}`, valor: c.valor, origen: "colanta" }));
+    (l.deducciones || []).filter((d) => /FOMENTO/i.test(d.concepto)).forEach((d) => conAjuste({ id: `col-${l.id}-fomento`, fecha: l.hasta, categoria: "Cuotas y parafiscales", descripcion: `Cuota de fomento sem. ${l.semana}`, valor: d.valor, origen: "colanta" }));
   });
   const cc = cfgCostos();
   if (m <= hoy().slice(0, 7)) {
@@ -1129,7 +1130,8 @@ function vPlata() {
       : `<p class="muted small">Sin gastos este mes. Las compras en Agrocolanta se suman solas al cargar la liquidación.</p>`}
     </div>
     <div class="panel stack"><div class="row spread"><h3>Gastos del mes</h3><button class="btn ghost sm" id="pFijos" type="button">Fijos y mano de obra</button></div>
-      ${r.G.length ? `<div class="tablewrap"><table><tr><th>Fecha</th><th>Concepto</th><th class="r">Valor</th><th></th></tr>${r.G.map((g) => `<tr><td>${fmt(g.fecha)}</td><td>${esc(g.descripcion || g.categoria)}<br><span class="small muted">${esc(g.categoria)}${g.origen === "colanta" ? " · de la liquidación" : g.origen === "fijo" ? " · fijo" : g.origen === "familiar" ? " · estimado" : ""}</span></td><td class="r">${pesos(g.valor)}</td><td>${g.origen === "manual" ? `<button class="btn ghost sm" type="button" data-g="${esc(g.id)}">Editar</button>` : ""}</td></tr>`).join("")}</table></div>` : `<p class="muted small">Nada registrado.</p>`}
+      ${r.G.length ? `<div class="tablewrap"><table><tr><th>Fecha</th><th>Concepto</th><th class="r">Valor</th><th></th></tr>${r.G.map((g) => `<tr><td>${fmt(g.fecha)}</td><td>${esc(g.descripcion || g.categoria)}<br><span class="small muted">${esc(g.categoria)}${g.origen === "colanta" ? (g.editado ? " · de la liquidación, corregido" : " · de la liquidación") : g.origen === "fijo" ? " · fijo" : g.origen === "familiar" ? " · estimado" : ""}</span></td><td class="r">${pesos(g.valor)}</td><td>${g.origen === "manual" ? `<button class="btn ghost sm" type="button" data-g="${esc(g.id)}">Editar</button>` : g.origen === "colanta" ? `<button class="btn ghost sm" type="button" data-gc="${esc(g.id)}">Editar</button>` : ""}</td></tr>`).join("")}</table></div>` : `<p class="muted small">Nada registrado.</p>`}
+      ${(() => { const ex = S.gastos.filter((g) => g.ajuste && g.excluido && enMes(g.fecha, mesPlata)); return ex.length ? `<div class="small muted">No se cuentan: ${ex.map((g) => `${esc(g.descripcion || "compra de la liquidación")} (${pesos(g.valor)}) <button class="btn ghost sm" type="button" data-gr="${esc(g.id)}">Volver a contar</button>`).join(" · ")}</div>` : ""; })()}
     </div>
     <div class="panel stack"><h3>Últimos 6 meses</h3>
       <div class="tablewrap"><table><tr><th>Mes</th><th class="r">Litros</th><th class="r">Costo/L</th><th class="r">Pagado/L</th><th class="r">Ganancia</th></tr>
@@ -1149,21 +1151,24 @@ function vPlata() {
   $$("tr[data-a]", el).forEach((tr) => (tr.onclick = () => hojaVida(tr.dataset.a)));
   $("#pPrecios").onclick = formPrecios;
   $$("[data-g]", el).forEach((b) => (b.onclick = () => formGasto(S.gastos.find((g) => g.id === b.dataset.g))));
+  $$("[data-gc]", el).forEach((b) => (b.onclick = () => formGasto(r.G.find((g) => g.id === b.dataset.gc), {}, { colanta: true })));
+  $$("[data-gr]", el).forEach((b) => (b.onclick = () => del("gastos", b.dataset.gr).then(() => { toast("Se vuelve a contar"); vPlata(); })));
 }
 
-function formGasto(g, pre = {}) {
+function formGasto(g, pre = {}, opt = {}) {
   const x = { fecha: hoy(), categoria: CATS[0], ...pre, ...(g || {}) };
-  sheet(cab(g ? "Editar gasto" : "Nuevo gasto") + `
+  if (opt.colanta && !CATS.includes(x.categoria)) x.categoria = CATS[0];
+  sheet(cab(opt.colanta ? "Gasto de la liquidación" : g ? "Editar gasto" : "Nuevo gasto") + (opt.colanta ? `<p class="small muted">Viene de la liquidación de Colanta${x.original != null && x.original !== x.valor ? ` (decía ${pesos(x.original)})` : ""}. Puede corregir el valor, la categoría o la descripción, o dejar de contarlo si no fue un gasto de la finca.</p>` : "") + `
     <form id="fG" class="stack">
       <div class="opciones">${CATS.map((c) => `<button type="button" class="chipbtn" data-c="${esc(c)}" aria-pressed="${x.categoria === c}">${esc(c)}</button>`).join("")}</div>
       <div class="grid2">
         <label class="f">Valor ($)<input class="big" id="gV" inputmode="numeric" value="${x.valor ? nf(x.valor) : ""}" placeholder="0" required></label>
-        <label class="f">Fecha<input type="date" id="gF" value="${x.fecha}" max="${hoy()}"></label>
+        <label class="f">Fecha<input type="date" id="gF" value="${x.fecha}" max="${hoy()}"${opt.colanta ? " disabled" : ""}></label>
         <label class="f full">Descripción<input id="gD" value="${esc(x.descripcion || "")}" placeholder="Ej. 10 bultos de concentrado"></label>
         ${S.potreros.length ? `<label class="f full">Potrero (opcional)<select id="gP"><option value="">Ninguno</option>${S.potreros.map((p) => `<option value="${esc(p.id)}"${x.potreroId === p.id ? " selected" : ""}>${esc(p.nombre)}</option>`).join("")}</select></label>` : ""}
       </div>
       <button class="btn" type="submit">Guardar gasto</button>
-      ${g ? `<button class="btn ghost" type="button" id="gDel">Eliminar</button>` : ""}
+      ${opt.colanta ? `<button class="btn ghost" type="button" id="gExc">No contar este gasto</button>${x.editado ? `<button class="btn ghost" type="button" id="gOrig">Dejarlo como venía en la liquidación</button>` : ""}` : g ? `<button class="btn ghost" type="button" id="gDel">Eliminar</button>` : ""}
     </form>`, (s) => {
     let cat = x.categoria;
     $$("[data-c]", s).forEach((b) => (b.onclick = () => { cat = b.dataset.c; $$("[data-c]", s).forEach((y) => y.setAttribute("aria-pressed", y === b)); }));
@@ -1171,8 +1176,11 @@ function formGasto(g, pre = {}) {
     $("#fG", s).onsubmit = (ev) => { ev.preventDefault();
       const valor = pint($("#gV", s).value); if (!valor) return toast("Escriba el valor del gasto");
       const p = $("#gP", s);
+      if (opt.colanta) return guardarYcerrar(() => save("gastos", { id: g.id, ajuste: true, fecha: g.fecha, categoria: cat, descripcion: $("#gD", s).value.trim(), valor, potreroId: p && p.value ? p.value : null }), "Gasto corregido");
       guardarYcerrar(() => save("gastos", { id: g ? g.id : uid(), fecha: $("#gF", s).value, categoria: cat, descripcion: $("#gD", s).value.trim(), valor, potreroId: p && p.value ? p.value : null }), "Gasto guardado");
     };
+    const ex = $("#gExc", s); if (ex) ex.onclick = function () { confirmar(this, "Toque otra vez: no se contará en los gastos", () => guardarYcerrar(() => save("gastos", { id: g.id, ajuste: true, excluido: true, fecha: g.fecha, descripcion: g.descripcion, valor: g.valor }), "Ese gasto ya no se cuenta")); };
+    const og = $("#gOrig", s); if (og) og.onclick = () => guardarYcerrar(() => del("gastos", g.id), "Quedó como venía en la liquidación");
     const d = $("#gDel", s); if (d) d.onclick = function () { confirmar(this, "Toque otra vez para eliminar", () => guardarYcerrar(() => del("gastos", g.id), "Gasto eliminado")); };
   });
 }

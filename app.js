@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.7.0";
+const APP_VERSION = "2.7.1";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -196,6 +196,11 @@ function nivelHTML(n) { const v = NIVELES[n] || 0; return v ? `<span class="nive
 function chips(an, c) {
   let h = `<span class="chip ${an.estado === "lactancia" ? "lact" : an.estado === "seca" ? "seca" : ""}">${esc(ESTADOS[an.estado] || an.estado)}</span>`;
   if (c && c.prenada) h += `<span class="chip pren">Preñada</span>`;
+  else if (c && an.sexo !== "M" && ["lactancia", "seca", "novilla"].includes(an.estado)) {
+    const e = estadoRepro(an, c) || "";
+    if (/^Servida/.test(e)) h += `<span class="chip">Servida, sin palpar</span>`;
+    else if (an.estado !== "novilla" || /^Vacía/.test(e)) h += `<span class="chip vacia">Vacía</span>`;
+  }
   if (retiro(an.arete)) h += `<span class="chip retiro">Leche en retiro</span>`;
   if (an.ejemplo) h += `<span class="chip ej">Ejemplo</span>`;
   return h;
@@ -328,7 +333,7 @@ function vHato() {
     $("#hLista", cont).innerHTML = lista.length ? lista.map((an) => {
       const c = ciclo(an);
       let f2, f3;
-      if (an.estado === "lactancia") { f2 = ["Días de parida", c.del ?? "–"]; f3 = c.fpp ? ["Parto probable", fmt(c.fpp)] : ["Producción", an.nivel ? an.nivel[0].toUpperCase() + an.nivel.slice(1) : "–"]; }
+      if (an.estado === "lactancia") { f2 = c.prenada ? ["Días de parida", c.del ?? "–"] : ["Último parto", c.ultParto ? fmt(c.ultParto) : "–"]; f3 = c.fpp ? ["Parto probable", fmt(c.fpp)] : ["Días abiertos", c.dAbiertos ?? "–"]; }
       else if (c.fpp) { f2 = ["Parto probable", fmt(c.fpp)]; f3 = ["Partos", c.nPartos]; }
       else { f2 = ["Partos", c.nPartos]; f3 = ["Raza", an.raza || "–"]; }
       return `<button class="card" type="button" data-a="${esc(an.arete)}">

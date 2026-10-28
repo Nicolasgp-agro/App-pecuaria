@@ -83,6 +83,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{ou
 .chip.lact{background:var(--milk-soft);color:var(--milk)}
 .chip.pren{background:var(--brand-soft);color:var(--brand)}
 .chip.seca{background:var(--amber-soft);color:var(--amber)}
+.chip.vacia{background:#fbe3dc;color:#a3391b}
 .chip.retiro{background:var(--bad);color:#fff}
 .chip.ej{background:transparent;border:1px dashed var(--muted)}
 .facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}

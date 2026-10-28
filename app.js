@@ -3,9 +3,9 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.6.1";
+const APP_VERSION = "2.7.0";
 const GEST = 283, SECADO = 60, ESPERA = 45;
-const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config"];
+const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
 const CONFIG_LOCAL = ["mercado", "avisos", "avisosVistos", "nube"]; // nunca se sincronizan
 let vista = "inicio", subHato = "animales", filtroHato = "", buscaHato = "", memOnly = false, instalarEvt = null;
@@ -44,7 +44,7 @@ let idb = null;
 function abrirDB() {
   return new Promise((res, rej) => {
     if (!("indexedDB" in window)) return rej(new Error("sin indexedDB"));
-    const r = indexedDB.open("hato-claro", 3);
+    const r = indexedDB.open("hato-claro", 4);
     r.onupgradeneeded = () => { const db = r.result; [...COLS, "cola"].forEach((c) => { if (!db.objectStoreNames.contains(c)) db.createObjectStore(c, { keyPath: "id" }); }); };
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
@@ -332,8 +332,9 @@ function vHato() {
       else if (c.fpp) { f2 = ["Parto probable", fmt(c.fpp)]; f3 = ["Partos", c.nPartos]; }
       else { f2 = ["Partos", c.nPartos]; f3 = ["Raza", an.raza || "–"]; }
       return `<button class="card" type="button" data-a="${esc(an.arete)}">
-        <div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h3>${esc(nombreVisible(an))}</h3>${nivelHTML(an.nivel)}</div><span class="small muted">${an.sexo === "M" ? "Macho" : "Hembra"}</span></div>
-        <div>${chips(an, c)}</div>
+        <div class="row" style="gap:12px;align-items:center;flex-wrap:nowrap">${miniFoto(an)}<div class="stack" style="gap:6px;flex:1;min-width:0">
+        <div class="row spread" style="flex-wrap:nowrap"><div class="row" style="gap:8px;min-width:0"><span class="tag">${esc(an.arete)}</span><h3 style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nombreVisible(an))}</h3>${nivelHTML(an.nivel)}</div><span class="small muted">${an.sexo === "M" ? "Macho" : "Hembra"}</span></div>
+        <div>${chips(an, c)}</div></div></div>
         <div class="facts small muted"><div>Edad<b>${edadTxt(an.nacimiento)}</b></div><div>${f2[0]}<b>${esc(f2[1])}</b></div><div>${f3[0]}<b>${esc(f3[1])}</b></div></div>
       </button>`;
     }).join("") : `<div class="empty">${t ? "Ningún animal coincide con la búsqueda." : `No hay animales ${filtroHato ? "en este grupo" : "todavía"}.<button class="btn" type="button" id="hNuevo2">Agregar la primera res</button>`}</div>`;
@@ -831,6 +832,7 @@ function detalle(arete) {
       ${an.estado === "lactancia" ? `<button class="accion" type="button" data-x="secado"><b>Secar</b></button>` : ""}
       <button class="accion" type="button" data-x="peso"><b>Registrar peso</b></button>
       <button class="accion" type="button" data-x="sintomas"><b>Revisar síntomas</b></button>
+      <button class="accion" type="button" data-x="foto"><b>📷 Foto</b></button>
     </div>
     <div><span class="eyebrow">Historial</span><div class="timeline" style="margin-top:8px">${ev.length ? ev.map((e) => `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(etiquetaEvento(e))}</b>${e.cria ? ` (cría ${esc(e.cria)})` : ""}${e.producto ? " · " + esc(e.producto) : ""}${e.retiroHasta ? ` · retiro hasta ${fmt(e.retiroHasta)}` : ""}${e.kg ? ` · ${nf(e.kg)} kg` : ""}${e.litros ? ` · ${nf(e.litros, 1)} L` : ""}${e.valor && plata ? ` · ${pesos(e.valor)}` : ""}${e.tipo === "salud" && e.posibles ? `<br><span class="small">Posibles: ${esc(e.posibles.slice(0, 3).join(", ") || "sin coincidencias")}</span>` : ""}${e.nota || e.por || e.quien ? `<br><span class="small muted">${esc([e.quien ? "palpó " + e.quien : "", e.nota || "", e.por ? "por " + e.por.split("@")[0] : ""].filter(Boolean).join(" · "))}</span>` : ""}</div>`).join("") : '<div class="muted">Sin registros.</div>'}</div></div>
     <div class="row"><button class="btn ghost sm" type="button" data-x="editar">Editar datos</button>${plata ? `<button class="btn ghost sm" type="button" data-x="vender">${an.estado === "vendida" ? "Ya vendida" : "Vender"}</button><button class="btn ghost sm" type="button" data-x="borrar">Eliminar</button>` : ""}</div>`,
@@ -843,8 +845,9 @@ function detalle(arete) {
       else if (x === "peso") formPeso(an);
       else if (x === "sintomas") formSintomas(arete);
       else if (x === "hv") hojaVida(arete);
+      else if (x === "foto") opcionesFoto(an, () => detalle(arete));
       else if (x === "revisado") { const { revisar, ...resto } = an; save("animales", resto).then(() => { toast("Listo"); render(); detalle(arete); }); }
-      else if (x === "borrar") confirmar(this, "Toque otra vez para eliminar", () => guardarYcerrar(() => del("animales", an.id), "Res eliminada"));
+      else if (x === "borrar") confirmar(this, "Toque otra vez para eliminar", () => guardarYcerrar(async () => { await del("animales", an.id); if (fotoDe(an.arete)) await del("fotos", fotoDe(an.arete).id); }, "Res eliminada"));
       else abrir(x, arete);
     }));
   });
@@ -1931,8 +1934,10 @@ async function sincronizar({ silencioso = true } = {}) {
     if (!sesion) { try { sesion = await r.sesion(); } catch (e) {} if (!sesion) throw new Error("Entre otra vez con su correo en Más"); if (!n.email) await guardarNube({ email: sesion.email }); }
     // 1. subir lo pendiente
     const cola = await leerCola();
-    for (let i = 0; i < cola.length; i += 200) {
-      const lote = cola.slice(i, i + 200);
+    const lotes = []; let act = [], peso = 0;
+    for (const q of cola) { const d = S[q.col] && S[q.col].find((x) => x.id === q.docId), t = d ? JSON.stringify(d).length : 50; if (act.length && (act.length >= 200 || peso + t > 1500000)) { lotes.push(act); act = []; peso = 0; } act.push(q); peso += t; }
+    if (act.length) lotes.push(act);
+    for (const lote of lotes) {
       const filas = lote.map((q) => { const doc = S[q.col] && S[q.col].find((x) => x.id === q.docId); return { finca_id: finca, coleccion: q.col, id: q.docId, datos: doc && !q.borrado ? doc : {}, borrado: q.borrado || !doc }; });
       await r.subir(filas);
       await tx("cola", "readwrite", (st) => lote.forEach((q) => st.delete(q.id)));
@@ -2249,14 +2254,20 @@ function hojaVida(arete) {
   const hermanos = an.madre ? S.animales.filter((a) => a.madre === an.madre && a.arete !== arete).sort(porArete) : [];
   const madre = an.madre && S.animales.find((a) => a.arete === an.madre), padre = padreDe(an), est = estadoRepro(an, c);
   const intervalo = partos.length >= 2 ? Math.round(avg(partos.slice(1).map((p, i) => diff(p.fecha, partos[i].fecha)))) : null;
-  const w = pesoAnimal(an), r = retiro(arete);
+  const w = pesoAnimal(an), r = retiro(arete), foto = fotoDe(arete), lv = an.estado === "lactancia" ? litrosVaca(an) : null;
   const tag = (x) => `<button type="button" class="tagbtn" data-hv="${esc(x.arete)}"><span class="tag">${esc(x.arete)}</span> ${esc(x.nombre || "")}</button>`;
   const linea = (e) => { const d = detalleEv(e); return `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(etiquetaEvento(e))}</b>${d ? `<br><span class="small muted">${esc(d)}</span>` : ""}</div>`; };
   const seccion = (titulo, lista, max = 12) => lista.length ? `<div class="panel stack"><span class="eyebrow">${titulo}</span><div class="timeline">${lista.slice(0, max).map(linea).join("")}</div>${lista.length > max ? `<span class="small muted">y ${lista.length - max} registros más antiguos</span>` : ""}</div>` : "";
   sheet(`<div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h2>${esc(nombreVisible(an))}</h2></div><button class="btn ghost sm" data-close type="button">Cerrar</button></div>
-    <span class="eyebrow">Hoja de vida</span>
-    <div>${chips(an, c)}</div>
+    ${foto ? `<button type="button" class="hv-foto" id="hvFoto" aria-label="Cambiar foto"><img src="${foto.img}" alt="Foto de ${esc(an.arete)}"></button>` : `<button type="button" class="hv-foto vacia" id="hvFoto">${ICONO_RES}<span>Agregar foto</span></button>`}
+    <div class="row spread"><span class="eyebrow">Hoja de vida</span><div>${chips(an, c)}</div></div>
     ${an.revisar ? `<div class="alerta"><span class="quien">Por revisar</span><span>${esc(an.revisar)}</span></div>` : ""}
+    <div class="facts">
+      <div>Estado<b>${esc(ESTADOS[an.estado] || an.estado)}</b></div><div>Edad<b>${edadTxt(an.nacimiento)}</b></div><div>Raza<b>${esc(an.raza || "–")}</b></div>
+      ${est ? `<div style="grid-column:span 2">Reproducción<b>${esc(est)}</b></div><div>Partos<b>${c.nPartos}</b></div>
+      <div>${c.fpp ? "Parto probable" : "Último parto"}<b>${c.fpp ? fmt(c.fpp) : c.ultParto ? fmt(c.ultParto) : "–"}</b></div><div>Días parida<b>${c.del ?? "–"}</b></div><div>Leche<b>${lv ? nf(lv.l, 1) + " L/día" + (lv.medido ? "" : "*") : "–"}</b></div>` : `<div>Peso<b>${nf(w.kg)} kg</b></div><div>Madre<b>${esc(an.madre || "–")}</b></div><div>Padre<b>${esc(padre || "–")}</b></div>`}
+    </div>
+    <details class="hv-mas"><summary class="btn ghost block">Ver historia completa</summary><div class="stack" style="margin-top:12px">
     ${r ? `<div class="alerta bad"><span class="quien">Leche en retiro</span><span>No entregar hasta el ${fmt(r.retiroHasta)} inclusive${r.producto ? " · " + esc(r.producto) : ""}.</span></div>` : ""}
     <div class="facts small muted">
       <div>Raza<b>${esc(an.raza || "–")}</b></div><div>Sexo<b>${hembra ? "Hembra" : "Macho"}</b></div><div>Edad<b>${edadTxt(an.nacimiento)}</b></div>
@@ -2275,9 +2286,11 @@ function hojaVida(arete) {
     ${seccion("Pesajes", pesosEv, 6)}
     ${crias.length ? `<div class="panel stack"><span class="eyebrow">Crías · ${crias.length}</span><div class="opciones">${crias.map(tag).join("")}</div></div>` : ""}
     ${hermanos.length ? `<div class="panel stack"><span class="eyebrow">Hermanos de madre · ${hermanos.length}</span><div class="opciones">${hermanos.map(tag).join("")}</div></div>` : ""}
-    <div class="row"><button class="btn" type="button" id="hvCompartir">Enviar por WhatsApp</button><button class="btn ghost" type="button" id="hvFicha">Registrar algo</button></div>`,
+    </div></details>
+    <div class="row"><button class="btn" type="button" id="hvFicha">Registrar algo</button><button class="btn ghost" type="button" id="hvCompartir">Enviar por WhatsApp</button></div>`,
   (s) => {
     $$("[data-hv]", s).forEach((b) => (b.onclick = () => hojaVida(b.dataset.hv)));
+    $("#hvFoto", s).onclick = () => (foto ? opcionesFoto(an, () => hojaVida(arete)) : pedirFoto(an, () => hojaVida(arete), true));
     $("#hvFicha", s).onclick = () => detalle(arete);
     $("#hvCompartir", s).onclick = () => {
       const L = [`*Hoja de vida · ${an.arete}${an.nombre ? " " + an.nombre : ""}*`, `${an.raza || "Raza sin dato"} · ${hembra ? "Hembra" : "Macho"} · ${edadTxt(an.nacimiento)} · ${ESTADOS[an.estado] || an.estado}`];
@@ -2560,6 +2573,54 @@ function panelRentabilidad() {
     </table></div>
     ${r.estimadas ? `<p class="small muted">* Litros estimados repartiendo el tanque según si la vaca da alta, media o baja producción. Para saber de verdad cuál es la más rentable, haga un control lechero una vez al mes.</p>` : ""}
   </div>`;
+}
+/* ---------- fotos de los animales ---------- */
+const fotoDe = (arete) => S.fotos.find((f) => f.arete === arete) || null;
+const ICONO_RES = `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6c1 1.5 2.5 2 4 2h8c1.5 0 3-.5 4-2"/><path d="M7 8.5v5.5a5 5 0 0 0 10 0V8.5"/><circle cx="10" cy="12" r=".6" fill="currentColor"/><circle cx="14" cy="12" r=".6" fill="currentColor"/><path d="M10.5 16.5h3"/></svg>`;
+function miniFoto(an, tam = 52) {
+  const f = fotoDe(an.arete);
+  return f ? `<img class="foto-mini" src="${f.mini}" alt="" style="width:${tam}px;height:${tam}px" loading="lazy">` : `<span class="foto-mini vacia" style="width:${tam}px;height:${tam}px">${ICONO_RES}</span>`;
+}
+async function comprimirImagen(file, lado, calidad) {
+  let src;
+  try { src = await createImageBitmap(file, { imageOrientation: "from-image" }); }
+  catch (e) { src = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); }); }
+  const w = src.width, h = src.height, k = Math.min(1, lado / Math.max(w, h));
+  const cv = document.createElement("canvas"); cv.width = Math.round(w * k); cv.height = Math.round(h * k);
+  cv.getContext("2d").drawImage(src, 0, 0, cv.width, cv.height);
+  return cv.toDataURL("image/jpeg", calidad);
+}
+async function recorteCuadrado(dataUrl, lado) {
+  const i = await new Promise((res, rej) => { const x = new Image(); x.onload = () => res(x); x.onerror = rej; x.src = dataUrl; });
+  const s = Math.min(i.width, i.height), cv = document.createElement("canvas"); cv.width = cv.height = lado;
+  cv.getContext("2d").drawImage(i, (i.width - s) / 2, (i.height - s) / 2, s, s, 0, 0, lado, lado);
+  return cv.toDataURL("image/jpeg", 0.72);
+}
+function pedirFoto(an, alTerminar, camara = true) {
+  const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; if (camara) inp.setAttribute("capture", "environment");
+  inp.onchange = async () => {
+    const file = inp.files && inp.files[0]; if (!file) return;
+    try {
+      toast("Guardando foto…");
+      const img = await comprimirImagen(file, 900, 0.72), mini = await recorteCuadrado(img, 120);
+      await save("fotos", { id: an.id, arete: an.arete, img, mini, fecha: hoy() });
+      toast("Foto guardada"); render(); alTerminar && alTerminar();
+    } catch (e) { toast("No se pudo leer la foto. Intente con otra."); }
+  };
+  inp.click();
+}
+function opcionesFoto(an, alTerminar) {
+  const f = fotoDe(an.arete);
+  sheet(cab(`Foto de ${esc(an.arete)}${an.nombre ? " · " + esc(an.nombre) : ""}`) + `
+    ${f ? `<img src="${f.img}" alt="" style="width:100%;border-radius:12px;max-height:50vh;object-fit:contain;background:var(--line)">` : ""}
+    <button class="btn" type="button" id="foCam">📷 Tomar foto</button>
+    <button class="btn ghost" type="button" id="foGal">Elegir de la galería</button>
+    ${f ? `<button class="btn ghost" type="button" id="foDel">Quitar la foto</button>` : ""}
+    <p class="small muted">Tómela de lado, con la vaca completa y buena luz. La app la achica para que no ocupe espacio.</p>`, (s) => {
+    $("#foCam", s).onclick = () => pedirFoto(an, alTerminar, true);
+    $("#foGal", s).onclick = () => pedirFoto(an, alTerminar, false);
+    const d = $("#foDel", s); if (d) d.onclick = function () { confirmar(this, "Toque otra vez para quitarla", async () => { await del("fotos", f.id); toast("Foto quitada"); render(); alTerminar ? alTerminar() : cerrar(); }); };
+  });
 }
 /* ---------- exportar y copias ---------- */
 function descargar(nombre, blob) {

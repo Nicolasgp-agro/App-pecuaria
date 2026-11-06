@@ -120,11 +120,22 @@ function parseColanta(pages) {
   const compras = [];
   const iA = find(/COMPRAS AGROCOLANTA/i);
   if (iA >= 0) {
+    // Encabezado "KG VALOR KG VALOR": las dos primeras columnas son de la semana y las dos últimas del acumulado del año.
+    // Cuando en la semana no hubo compras, el renglón trae solo el acumulado: no se debe contar como gasto de la semana.
+    let corte = null;
+    for (let i = iA; i < R.length && i < iA + 4; i++) {
+      const h = R[i].items.filter((it) => /^(KG|VALOR)$/i.test(it.s));
+      if (h.length >= 4) { corte = (h[1].x + h[2].x) / 2; break; }
+    }
+    if (corte == null) { const a = R[iA].items.find((it) => /^ACUMULADO/i.test(it.s)); if (a) corte = a.x - 15; }
     for (let i = iA + 1; i < R.length && i < iA + 15; i++) {
       const r = R[i]; if (r.page !== R[iA].page) break;
       if (r.label && r.nums.length >= 2 && !/GRUPO|SEMANA|ACUMULADO|KG|VALOR/i.test(r.label)) {
-        const v = r.nums.map((n) => n.v);
-        compras.push({ grupo: r.label, kg: v[0], valor: v[1], kgAnio: v[2] ?? null, valorAnio: v[3] ?? null });
+        let sem = r.nums, anio = [];
+        if (corte != null) { sem = r.nums.filter((n) => n.x < corte); anio = r.nums.filter((n) => n.x >= corte); }
+        else if (r.nums.length === 2) { sem = []; anio = r.nums; } // sin encabezado: dos números suelen ser el acumulado
+        const v = sem.map((n) => n.v), w = anio.map((n) => n.v);
+        compras.push({ grupo: r.label, kg: v[0] ?? null, valor: v[1] ?? null, kgAnio: w[0] ?? null, valorAnio: w[1] ?? null });
       }
     }
   }

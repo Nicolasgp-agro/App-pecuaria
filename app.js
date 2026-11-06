@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.10.0";
+const APP_VERSION = "2.10.1";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -392,7 +392,7 @@ function vLeche() {
   const lq = liqs[0];
   const bar = (v, lo, hi, color) => `<div class="qbar"><i style="width:${Math.max(4, Math.min(100, ((v - lo) / (hi - lo)) * 100))}%;background:var(${color})"></i></div>`;
   const param = (nombre, v, unidad, dec, lo, hi, color) => v == null ? "" : `<div>${nombre} <b class="num">${nf(v, dec)}${unidad}</b>${bar(v, lo, hi, color)}</div>`;
-  const conc = lq && lq.compras ? lq.compras.find((c) => /CONCENTRADO/i.test(c.grupo)) : null;
+  const conc = lq && lq.compras ? lq.compras.find((c) => /CONCENTRADO/i.test(c.grupo) && c.valor) : null;
   const hayGP = q.some((r) => r.grasa != null || r.proteina != null);
   el.innerHTML = `
     <div class="row spread"><h2>Leche entregada</h2><button class="btn sm" id="lNueva" type="button">+ Registrar</button></div>
@@ -2726,10 +2726,14 @@ function litrosVaca(an) {
   const rec = med.filter((e) => diff(hoy(), e.fecha) <= 120);
   if (rec.length) return { l: avg(rec.slice(-3).map((e) => e.litros)), medido: true };
   if (med.length) return { l: med[med.length - 1].litros, medido: true, viejo: true };
-  const ord = S.animales.filter((a) => a.estado === "lactancia"), ents = S.entregas.filter((e) => diff(hoy(), e.fecha) <= 30 && e.litros);
-  if (!ord.length || !ents.length) return null;
+  // Litros por día del tanque: suma de 4 semanas dividida por los días (Colanta recoge cada 2 días, no todos los días)
+  const ord = S.animales.filter((a) => a.estado === "lactancia"), todas = S.entregas.filter((e) => e.litros && e.fecha <= hoy());
+  if (!ord.length || !todas.length) return null;
+  const ult = todas.reduce((m, e) => (e.fecha > m ? e.fecha : m), "0000"), pri = todas.reduce((m, e) => (e.fecha < m ? e.fecha : m), "9999");
+  if (diff(hoy(), ult) > 45) return null;
+  const ents = todas.filter((e) => diff(ult, e.fecha) < 28), dias = Math.max(1, Math.min(28, diff(ult, pri) + 1));
   const peso = (a) => ({ alta: 1.3, media: 1, baja: 0.7 }[a.nivel] || 1), tot = ord.reduce((x, a) => x + peso(a), 0);
-  return { l: (avg(ents.map((e) => e.litros)) * peso(an)) / tot, medido: false };
+  return { l: (ents.reduce((x, e) => x + e.litros, 0) / dias * peso(an)) / tot, medido: false };
 }
 function diasOrdeno12(an) {
   const ini = add(hoy(), -365), ev = evDe(an.arete).filter((e) => e.tipo === "parto" || e.tipo === "secado");

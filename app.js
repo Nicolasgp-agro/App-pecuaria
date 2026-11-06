@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.9.1";
+const APP_VERSION = "2.10.0";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -205,6 +205,14 @@ function chips(an, c) {
   if (retiro(an.arete)) h += `<span class="chip retiro">Leche en retiro</span>`;
   if (an.ejemplo) h += `<span class="chip ej">Ejemplo</span>`;
   return h;
+}
+// Edad al primer parto: solo si se sabe cuándo nació y el primer parto está registrado en la app
+function primerParto(an) {
+  if (!an.nacimiento || an.partosPrevios) return null;
+  const p = evDe(an.arete).find((e) => e.tipo === "parto"); if (!p) return null;
+  const d = diff(p.fecha, an.nacimiento); if (d < 300) return null;
+  const m = Math.round(d / 30.4), a = Math.floor(m / 12), r = m % 12;
+  return { fecha: p.fecha, meses: m, txt: `${m} meses${a ? ` (${a} ${a === 1 ? "año" : "años"}${r ? " y " + r + (r === 1 ? " mes" : " meses") : ""})` : ""}` };
 }
 function edadTxt(nac) { if (!nac) return "–"; const d = diff(hoy(), nac); return d < 730 ? ((m) => (m === 1 ? "1 mes" : m + " meses"))(Math.max(0, Math.round(d / 30.4))) : (d / 365.25).toFixed(1).replace(".", ",") + " años"; }
 
@@ -530,6 +538,7 @@ function vCiclos(el) {
   const ev = [...S.eventos].sort((a, b) => (a.fecha < b.fecha ? 1 : -1)).slice(0, 15);
   el.innerHTML = `
     <div class="row" style="gap:8px"><button class="btn" type="button" id="cPalpa" style="flex:1">Palpación</button><button class="btn ghost" type="button" id="cRegs" style="flex:1">Ver registros</button></div>
+    <button class="btn ghost block" type="button" id="cPDF">📄 Listado para el veterinario (PDF)</button>
     <div class="panel stack"><h2>Próximos 30 días</h2>
       ${prox.length ? `<div class="tablewrap"><table><tr><th>Fecha</th><th>Qué</th><th>Animal</th></tr>${prox.map((p) => `<tr><td>${fmt(p.f)}<br><span class="small muted">${diff(p.f, hoy()) === 0 ? "hoy" : "en " + diff(p.f, hoy()) + " días"}</span></td><td>${esc(p.t)}</td><td><span class="tag">${esc(p.an.arete)}</span> ${esc(p.an.nombre || "")}</td></tr>`).join("")}</table></div>` : `<p class="muted">Nada programado en el próximo mes.</p>`}
     </div>
@@ -541,6 +550,7 @@ function vCiclos(el) {
       <div class="timeline">${ev.length ? ev.map((e) => `<div><span class="small muted">${fmt(e.fecha)}</span><br><b>${esc(e.tipo === "obs" ? e.obs : TIPOS[e.tipo] || e.tipo)}</b> · <span class="tag">${esc(e.arete)}</span>${e.cria ? ` → cría <span class="tag">${esc(e.cria)}</span>` : ""}${e.producto ? " · " + esc(e.producto) : ""}${e.nota ? ` <span class="muted">— ${esc(e.nota)}</span>` : ""}</div>`).join("") : `<div class="muted">Sin registros todavía.</div>`}</div>
     </div>`;
   $("#cPalpa", el).onclick = formPalpacion;
+  $("#cPDF", el).onclick = formListadoPalpa;
   $("#cRegs", el).onclick = () => { subHato = "registros"; vHato(); };
 }
 
@@ -2386,7 +2396,7 @@ function hojaVida(arete) {
   const hermanos = an.madre ? S.animales.filter((a) => a.madre === an.madre && a.arete !== arete).sort(porArete) : [];
   const madre = an.madre && S.animales.find((a) => a.arete === an.madre), padre = padreDe(an), est = estadoRepro(an, c);
   const intervalo = partos.length >= 2 ? Math.round(avg(partos.slice(1).map((p, i) => diff(p.fecha, partos[i].fecha)))) : null;
-  const w = pesoAnimal(an), r = retiro(arete), foto = fotoDe(arete), lv = an.estado === "lactancia" ? litrosVaca(an) : null;
+  const w = pesoAnimal(an), r = retiro(arete), foto = fotoDe(arete), lv = an.estado === "lactancia" ? litrosVaca(an) : null, pp1 = primerParto(an);
   const tag = (x) => `<button type="button" class="tagbtn" data-hv="${esc(x.arete)}"><span class="tag">${esc(x.arete)}</span> ${esc(x.nombre || "")}</button>`;
   const linea = (e) => { const d = detalleEv(e); return `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(etiquetaEvento(e))}</b>${d ? `<br><span class="small muted">${esc(d)}</span>` : ""}${botonEv(e)}</div>`; };
   const seccion = (titulo, lista, max = 12) => lista.length ? `<div class="panel stack"><span class="eyebrow">${titulo}</span><div class="timeline">${lista.slice(0, max).map(linea).join("")}</div>${lista.length > max ? `<span class="small muted">y ${lista.length - max} registros más antiguos</span>` : ""}</div>` : "";
@@ -2397,7 +2407,8 @@ function hojaVida(arete) {
     <div class="facts">
       <div>Estado<b>${esc(ESTADOS[an.estado] || an.estado)}</b></div><div>Edad<b>${edadTxt(an.nacimiento)}</b></div><div>Raza<b>${esc(an.raza || "–")}</b></div>
       ${est ? `<div style="grid-column:span 2">Reproducción<b>${esc(est)}</b></div><div>Partos<b>${c.nPartos}</b></div>
-      <div>${c.fpp ? "Parto probable" : "Último parto"}<b>${c.fpp ? fmt(c.fpp) : c.ultParto ? fmt(c.ultParto) : "–"}</b></div><div>Días en leche<b>${c.del ?? "–"}</b></div><div>Leche<b>${lv ? nf(lv.l, 1) + " L/día" + (lv.medido ? "" : "*") : "–"}</b></div>` : `<div>Peso<b>${nf(w.kg)} kg</b></div><div>Madre<b>${esc(an.madre || "–")}</b></div><div>Padre<b>${esc(padre || "–")}</b></div>`}
+      <div>${c.fpp ? "Parto probable" : "Último parto"}<b>${c.fpp ? fmt(c.fpp) : c.ultParto ? fmt(c.ultParto) : "–"}</b></div><div>Días en leche<b>${c.del ?? "–"}</b></div><div>Leche<b>${lv ? nf(lv.l, 1) + " L/día" + (lv.medido ? "" : "*") : "–"}</b></div>
+      ${pp1 ? `<div style="grid-column:span 3">Edad al primer parto<b>${esc(pp1.txt)}</b></div>` : ""}` : `<div>Peso<b>${nf(w.kg)} kg</b></div><div>Madre<b>${esc(an.madre || "–")}</b></div><div>Padre<b>${esc(padre || "–")}</b></div>`}
     </div>
     <details class="hv-mas"><summary class="btn ghost block">Ver historia completa</summary><div class="stack" style="margin-top:12px">
     ${r ? `<div class="alerta bad"><span class="quien">Leche en retiro</span><span>No entregar hasta el ${fmt(r.retiroHasta)} inclusive${r.producto ? " · " + esc(r.producto) : ""}.</span></div>` : ""}
@@ -2408,7 +2419,8 @@ function hojaVida(arete) {
     </div>
     ${est ? `<div class="panel stack"><span class="eyebrow">Reproducción</span>
       <div class="facts small muted"><div>Estado<b>${esc(est)}</b></div><div>Partos<b>${c.nPartos}</b></div><div>Último parto<b>${c.ultParto ? fmt(c.ultParto) : "–"}</b></div>
-        <div>Parto probable<b>${c.fpp ? fmt(c.fpp) : "–"}</b></div><div>Días abiertos<b>${c.dAbiertos ?? "–"}</b></div><div>Entre partos<b>${intervalo ? intervalo + " días" : "–"}</b></div></div>
+        <div>Parto probable<b>${c.fpp ? fmt(c.fpp) : "–"}</b></div><div>Días abiertos<b>${c.dAbiertos ?? "–"}</b></div><div>Entre partos<b>${intervalo ? intervalo + " días" : "–"}</b></div>
+        <div style="grid-column:span 3">Edad al primer parto<b>${pp1 ? esc(pp1.txt) + " · " + fmt(pp1.fecha) : an.partosPrevios ? "– (parió antes de usar la app)" : !an.nacimiento ? "– (falta la fecha de nacimiento)" : "–"}</b></div></div>
       ${partos.length ? `<div class="timeline">${[...partos].reverse().map((p) => { const cr = p.cria && S.animales.find((a) => a.arete === p.cria); return `<div><span class="small muted">${fmt(p.fecha)}</span> · <b>${ordinalParto(p)}.º parto</b>${p.cria ? ` · cría ${cr ? tag(cr) : esc(p.cria)}${cr ? " " + (cr.sexo === "M" ? "macho" : "hembra") : ""}` : ""}${botonEv(p)}</div>`; }).join("")}</div>` : ""}
       ${an.partosPrevios ? `<span class="small muted">${an.partosPrevios} partos antes de usar la app.</span>` : ""}
     </div>` : ""}
@@ -2429,6 +2441,7 @@ function hojaVida(arete) {
     $("#hvCompartir", s).onclick = () => {
       const L = [`*Hoja de vida · ${an.arete}${an.nombre ? " " + an.nombre : ""}*`, `${an.raza || "Raza sin dato"} · ${hembra ? "Hembra" : "Macho"} · ${edadTxt(an.nacimiento)} · ${ESTADOS[an.estado] || an.estado}`];
       if (an.madre || padre) L.push(`Madre: ${an.madre || "–"} · Padre: ${padre || "–"}`);
+      if (pp1) L.push(`Edad al primer parto: ${pp1.txt}`);
       if (est) { L.push(`Partos: ${c.nPartos}${c.ultParto ? " · último " + fmt(c.ultParto) : ""}`); L.push(`Estado: ${est}${c.fpp ? " · parto probable " + fmt(c.fpp) : ""}`); }
       if (r) L.push(`Leche en retiro hasta ${fmt(r.retiroHasta)}`);
       if (repro.length) { L.push("", "Servicios y palpaciones:"); repro.slice(0, 6).forEach((e) => L.push(`- ${fmt(e.fecha)}: ${etiquetaEvento(e)}`)); }
@@ -2459,6 +2472,72 @@ function formBuscar() {
   });
 }
 
+/* listado en PDF para la visita del veterinario */
+let jspdfLib = null;
+function cargarJsPDF() {
+  if (jspdfLib) return Promise.resolve(jspdfLib);
+  const sc = (src) => new Promise((res, rej) => { const x = document.createElement("script"); x.src = src; x.onload = res; x.onerror = () => rej(new Error("No se pudo preparar el PDF")); document.head.appendChild(x); });
+  return sc("vendor/jspdf.umd.min.js").then(() => sc("vendor/jspdf.plugin.autotable.min.js")).then(() => (jspdfLib = window.jspdf));
+}
+function filasListado(soloPalpar) {
+  const h = hoy();
+  return porPalpar().filter((x) => !soloPalpar || x.prio <= 2 || (!x.c.prenada && x.an.estado === "lactancia" && x.c.ultParto && diff(h, x.c.ultParto) >= ESPERA)).map(({ an, c }) => {
+    const servPost = c.ultServ && (!c.ultParto || c.ultServ.fecha > c.ultParto) ? c.ultServ : null;
+    const diag = evDe(an.arete).filter((e) => ["prenez", "vacia"].includes(e.tipo) && (!c.ultParto || e.fecha >= c.ultParto)).pop();
+    return {
+      an, c,
+      estado: ESTADOS[an.estado] || an.estado,
+      del: an.estado === "lactancia" && c.ultParto ? diff(h, c.ultParto) : null,
+      servicio: servPost ? fmt(servPost.fecha) : "",
+      toro: servPost ? nombreServicio(servPost) : "",
+      dServ: servPost ? diff(h, servPost.fecha) : null,
+      nServ: c.nServ || 0,
+      diag: diag ? `${diag.tipo === "vacia" ? "Vacía" : "Cargada" + (diag.meses ? " " + diag.meses + " m" : "")} · ${fmt(diag.fecha)}` : "",
+    };
+  });
+}
+function formListadoPalpa() {
+  const nTodas = filasListado(false).length, nPal = filasListado(true).length;
+  if (!nTodas) return toast("No hay vacas ni novillas en el hato");
+  sheet(cab("Listado para el veterinario") + `<p class="small muted">Un PDF con cada vaca y novilla: días en leche, último servicio y toro, días desde el servicio y último diagnóstico. Trae una columna en blanco para anotar el resultado de la palpación.</p>
+    <div class="opciones"><button type="button" class="chipbtn" data-q="1" aria-pressed="true">Las que toca revisar · ${nPal}</button><button type="button" class="chipbtn" data-q="0" aria-pressed="false">Todas · ${nTodas}</button></div>
+    <p class="small muted">"Las que toca revisar": servidas sin confirmar y vacas en ordeño sin preñez confirmada que ya pasaron ${ESPERA} días de parida.</p>
+    <button class="btn" type="button" id="lpG">Generar PDF</button><div id="lpOut" class="stack"></div>`, (s) => {
+    let solo = true;
+    $$("[data-q]", s).forEach((b) => (b.onclick = () => { solo = b.dataset.q === "1"; $$("[data-q]", s).forEach((y) => y.setAttribute("aria-pressed", y === b)); }));
+    $("#lpG", s).onclick = async () => {
+      try {
+        const blob = await pdfListado(solo), nombre = `Palpacion ${cfg().nombre || "finca"} ${hoy()}.pdf`;
+        const file = new File([blob], nombre, { type: "application/pdf" });
+        const puede = navigator.canShare && navigator.canShare({ files: [file] });
+        $("#lpOut", s).innerHTML = `${puede ? `<button class="btn" type="button" id="lpSh">Enviar por WhatsApp</button>` : ""}<button class="btn ghost" type="button" id="lpDl">Descargar el PDF</button>`;
+        const sh = $("#lpSh", s); if (sh) sh.onclick = () => navigator.share({ files: [file], title: nombre }).catch(() => {});
+        $("#lpDl", s).onclick = () => descargar(nombre, blob);
+      } catch (e) { toast(e.message || "No se pudo generar el PDF"); }
+    };
+  });
+}
+async function pdfListado(solo) {
+  const { jsPDF } = await cargarJsPDF();
+  const filas = filasListado(solo), doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const titulo = `Listado para palpación · ${cfg().nombre || "Finca"}${hatoValido() ? " · " + (nombreHato(hatoSel) || "") : ""}`;
+  doc.setFontSize(14); doc.text(titulo, 12, 13);
+  doc.setFontSize(9); doc.setTextColor(90);
+  const nL = filas.filter((f) => f.an.estado === "lactancia").length, nS = filas.filter((f) => f.dServ != null && !f.c.prenada).length;
+  doc.text(`Fecha: ${new Date().toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}  ·  ${filas.length} animales  ·  ${nL} en ordeño  ·  ${nS} servidas sin confirmar  ·  Días en leche y días de servicio contados a hoy`, 12, 19);
+  doc.autoTable({
+    startY: 23, margin: { left: 10, right: 10 },
+    head: [["#", "Número", "Nombre", "Estado", "Partos", "Último parto", "Días en leche", "Último servicio", "Toro / IA", "Días de servicio", "N.º serv.", "Último diagnóstico", "Resultado hoy"]],
+    body: filas.map((f, i) => [i + 1, f.an.arete, f.an.nombre && f.an.nombre !== f.an.arete ? f.an.nombre : "", f.estado, f.c.nPartos || "", f.c.ultParto ? fmt(f.c.ultParto) : "", f.del ?? "", f.servicio, f.toro, f.dServ ?? "", f.nServ || "", f.diag, ""]),
+    styles: { fontSize: 8, cellPadding: 1.6, valign: "middle" },
+    headStyles: { fillColor: [31, 107, 69], textColor: 255, fontSize: 7.5 },
+    alternateRowStyles: { fillColor: [244, 247, 244] },
+    columnStyles: { 0: { cellWidth: 7, halign: "right" }, 4: { halign: "center" }, 6: { halign: "center", fontStyle: "bold" }, 9: { halign: "center", fontStyle: "bold" }, 10: { halign: "center" }, 12: { cellWidth: 38 } },
+    didDrawPage: (d) => { doc.setFontSize(7); doc.setTextColor(130); doc.text(`Hato Claro · página ${doc.internal.getNumberOfPages()}`, 10, doc.internal.pageSize.getHeight() - 5); },
+  });
+  return doc.output("blob");
+}
+
 /* palpación por lotes */
 function porPalpar() {
   const h = hoy();
@@ -2483,6 +2562,7 @@ function formPalpacion() {
     <p class="small muted">${pend ? `<b>${pend} ${pend === 1 ? "vaca pendiente" : "vacas pendientes"}</b> por palpar (servidas hace 35 días o más). ` : ""}Toque Cargada o Vacía en cada una, o díctelo: <i>"la 104 cargada de dos meses, la 105 vacía"</i>.</p>
     <div class="grid2"><label class="f">Fecha<input type="date" id="pFecha" value="${hoy()}" max="${hoy()}"></label><label class="f">Quién palpó (opcional)<input id="pQuien" placeholder="Ej. Dr. Pérez" autocomplete="off"></label></div>
     ${SR ? `<button class="btn ghost block" type="button" id="pVoz">🎙 Dictar resultados</button>` : ""}
+    <button class="btn ghost block" type="button" id="pPDF">📄 Listado para el veterinario (PDF)</button>
     <div class="row" style="gap:8px"><input type="search" id="pBusca" placeholder="Buscar vaca" style="flex:1" autocomplete="off" aria-label="Buscar vaca"><button class="chipbtn" type="button" id="pTodas" aria-pressed="${todas}">Todas</button></div>
     <div id="pLista" class="stack"></div>
     <div style="position:sticky;bottom:-1px;background:var(--surface);padding:10px 0 4px"><button class="btn block" type="button" id="pGuardar" disabled>Marque las vacas palpadas</button></div>`, (s) => {
@@ -2505,6 +2585,7 @@ function formPalpacion() {
     };
     $("#pBusca", s).oninput = (e) => { filtro = e.target.value; pintar(); };
     $("#pTodas", s).onclick = (e) => { todas = !todas; e.currentTarget.setAttribute("aria-pressed", todas); pintar(); };
+    $("#pPDF", s).onclick = formListadoPalpa;
     const voz = $("#pVoz", s);
     if (voz) voz.onclick = () => escuchar(voz, (txt) => {
       const acc = parseVoz(txt).filter((a) => (a.tipo === "prenez" || a.tipo === "vacia") && !a.dudoso);

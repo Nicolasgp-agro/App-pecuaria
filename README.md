@@ -16,6 +16,7 @@ Al publicar una versión nueva hay que cambiar `VERSION` en `sw.js`; así los ce
 
 ## Qué hace (versión 2.9)
 
+- **Quitar los datos cargados:** el dueño puede borrar del celular y de la nube todo lo que vino en un archivo de carga, sin tocar lo registrado a mano.
 - **Corregir sin perder historia:** se le puede cambiar el número a una res (por ejemplo al ponerle chapeta) y la app pasa sus registros, foto, crías y potreros al número nuevo; cada registro (parto, servicio, palpación, tratamiento, pesaje…) se puede editar o eliminar desde la ficha o la hoja de vida.
 - **Hato:** fichas, ciclos reproductivos, peso con cinta, valor y candidatas a descarte, buscador.
 - **Hatos o lotes:** varios hatos en la misma finca, animales con hato propio y ubicación actual, movimientos en lote y ruta en la hoja de vida.

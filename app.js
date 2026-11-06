@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.9.0";
+const APP_VERSION = "2.9.1";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -157,7 +157,7 @@ function alertas() {
         const ds = diff(h, c.ultServ.fecha);
         if (ds >= 18 && ds <= 24) out.push({ k: "info", o: 5, h: `${nom}<span>Servida hace ${ds} días: esté pendiente de si repite celo.</span>` });
         else if (ds >= 35) out.push({ k: "", o: 5, h: `${nom}<span>Servida hace ${ds} días sin diagnóstico: programe palpación o ecografía.</span>` });
-      } else if (del_ > ESPERA + 15) out.push({ k: del_ > 120 ? "bad" : "", o: 6, h: `${nom}<span>${del_} días de parida y sin servicio registrado.</span>` });
+      } else if (del_ > ESPERA + 15) out.push({ k: del_ > 120 ? "bad" : "", o: 6, h: `${nom}<span>${del_} días en leche y sin servicio registrado.</span>` });
     }
   }
   const L = resumenLeche();
@@ -336,7 +336,7 @@ function vHato() {
     $("#hLista", cont).innerHTML = lista.length ? lista.map((an) => {
       const c = ciclo(an);
       let f2, f3;
-      if (an.estado === "lactancia") { f2 = c.prenada ? ["Días de parida", c.del ?? "–"] : ["Último parto", c.ultParto ? fmt(c.ultParto) : "–"]; f3 = c.fpp ? ["Parto probable", fmt(c.fpp)] : ["Días abiertos", c.dAbiertos ?? "–"]; }
+      if (an.estado === "lactancia") { f2 = c.prenada ? ["Días en leche", c.del ?? "–"] : ["Último parto", c.ultParto ? fmt(c.ultParto) : "–"]; f3 = c.fpp ? ["Parto probable", fmt(c.fpp)] : ["Días abiertos", c.dAbiertos ?? "–"]; }
       else if (c.fpp) { f2 = ["Parto probable", fmt(c.fpp)]; f3 = ["Partos", c.nPartos]; }
       else { f2 = ["Partos", c.nPartos]; f3 = ["Raza", an.raza || "–"]; }
       return `<button class="card" type="button" data-a="${esc(an.arete)}">
@@ -535,7 +535,7 @@ function vCiclos(el) {
     </div>
     <div class="panel stack"><h2>Ciclo por vaca</h2>
       <p class="small muted">Parto probable a 283 días del servicio con preñez confirmada. Secado 60 días antes del parto.</p>
-      ${vacas.length ? `<div class="tablewrap"><table><tr><th>Vaca</th><th>Estado</th><th>Últ. parto</th><th class="r">Días parida</th><th>Últ. servicio</th><th>Parto prob.</th><th>Secar</th><th class="r">Días abiertos</th></tr>${vacas.map((an) => { const c = ciclo(an); return `<tr><td><span class="tag">${esc(an.arete)}</span> ${esc(an.nombre || "")}</td><td>${c.prenada ? '<span class="chip pren">Preñada</span>' : `<span class="chip">${esc(ESTADOS[an.estado])}</span>`}</td><td>${fmt(c.ultParto)}</td><td class="r">${c.del ?? "–"}</td><td>${c.ultServ ? fmt(c.ultServ.fecha) : "–"}</td><td>${fmt(c.fpp)}</td><td>${c.fpp ? fmt(add(c.fpp, -SECADO)) : "–"}</td><td class="r">${c.dAbiertos ?? "–"}</td></tr>`; }).join("")}</table></div>` : `<p class="muted">Sin vacas ni novillas registradas.</p>`}
+      ${vacas.length ? `<div class="tablewrap"><table><tr><th>Vaca</th><th>Estado</th><th>Últ. parto</th><th class="r">Días en leche</th><th>Últ. servicio</th><th>Parto prob.</th><th>Secar</th><th class="r">Días abiertos</th></tr>${vacas.map((an) => { const c = ciclo(an); return `<tr><td><span class="tag">${esc(an.arete)}</span> ${esc(an.nombre || "")}</td><td>${c.prenada ? '<span class="chip pren">Preñada</span>' : `<span class="chip">${esc(ESTADOS[an.estado])}</span>`}</td><td>${fmt(c.ultParto)}</td><td class="r">${c.del ?? "–"}</td><td>${c.ultServ ? fmt(c.ultServ.fecha) : "–"}</td><td>${fmt(c.fpp)}</td><td>${c.fpp ? fmt(add(c.fpp, -SECADO)) : "–"}</td><td class="r">${c.dAbiertos ?? "–"}</td></tr>`; }).join("")}</table></div>` : `<p class="muted">Sin vacas ni novillas registradas.</p>`}
     </div>
     <div class="panel stack"><h2>Últimos registros</h2>
       <div class="timeline">${ev.length ? ev.map((e) => `<div><span class="small muted">${fmt(e.fecha)}</span><br><b>${esc(e.tipo === "obs" ? e.obs : TIPOS[e.tipo] || e.tipo)}</b> · <span class="tag">${esc(e.arete)}</span>${e.cria ? ` → cría <span class="tag">${esc(e.cria)}</span>` : ""}${e.producto ? " · " + esc(e.producto) : ""}${e.nota ? ` <span class="muted">— ${esc(e.nota)}</span>` : ""}</div>`).join("") : `<div class="muted">Sin registros todavía.</div>`}</div>
@@ -577,6 +577,7 @@ function vMas() {
       <button class="btn ghost" id="mBackup" type="button">Guardar copia de seguridad</button>
       <label class="btn ghost" for="mRestore" style="cursor:pointer">Restaurar una copia</label>
       <input type="file" id="mRestore" accept="application/json,.json" hidden>
+      ${S.animales.some((x) => x.importado) || S.eventos.some((x) => x.importado) ? `<button class="btn ghost" id="mQuitarCarga" type="button">Quitar los datos cargados</button>` : ""}
       ${memOnly ? `<p class="small" style="color:var(--bad)">Este navegador no permite guardar datos. Lo que registre se perderá al cerrar. Abra Hato Claro en Chrome.</p>` : ""}
     </div>
     <div class="panel stack"><h2>Datos de ejemplo</h2>
@@ -602,6 +603,7 @@ function vMas() {
   $("#mPrecios").onclick = formPrecios;
   $("#mBackup").onclick = backup;
   $("#mRestore").onchange = (e) => restaurar(e.target.files[0]);
+  const qc = $("#mQuitarCarga"); if (qc) qc.onclick = quitarCarga;
   const be = $("#mBorrarEj"); if (be) be.onclick = function () { confirmar(this, "Toque otra vez para borrar los ejemplos", async () => { for (const k of COLS) for (const r of S[k].filter((x) => x.ejemplo)) await del(k, r.id); toast("Ejemplos borrados"); render(); }); };
   const ce = $("#mCargarEj"); if (ce) ce.onclick = async () => { await cargarEjemplo(); toast("Datos de ejemplo cargados"); render(); };
 }
@@ -897,7 +899,7 @@ function detalle(arete) {
     ${an.revisar ? `<div class="alerta"><span class="quien">Por revisar</span><span>${esc(an.revisar)}</span><button class="btn ghost sm" type="button" data-x="revisado" style="margin-top:6px">Ya lo revisé</button></div>` : ""}
     ${r ? `<div class="alerta bad"><span class="quien">Leche en retiro</span><span>No entregar hasta el ${fmt(r.retiroHasta)} inclusive${r.producto ? " · " + esc(r.producto) : ""}.</span></div>` : ""}
     <div class="facts small muted"><div>Raza<b>${esc(an.raza || "–")}</b></div><div>Edad<b>${edadTxt(an.nacimiento)}</b></div><div>Madre<b>${esc(an.madre || "–")}</b></div>
-      <div>Partos<b>${c.nPartos}</b></div><div>Días parida<b>${c.del ?? "–"}</b></div><div>Parto prob.<b>${fmt(c.fpp)}</b></div>
+      <div>Partos<b>${c.nPartos}</b></div><div>Días en leche<b>${c.del ?? "–"}</b></div><div>Parto prob.<b>${fmt(c.fpp)}</b></div>
       <div>Peso<b>${nf(w.kg)} kg${w.aprox ? " aprox." : ""}</b></div>${plata ? `<div class="full" style="grid-column:span 2">Valor estimado<b>${v ? pesos(v.valor) : "–"}</b></div>` : ""}</div>
     ${v ? `<p class="small muted" style="margin-top:-6px">${esc(v.base)}${v.descarte && /por cabeza/.test(v.base) ? ` · como descarte ${pesos(v.descarte.valor)}` : ""}${v.tope ? ". Es un tope: ponga en Precios lo que pagan por vaca de descarte en su zona." : ""}</p>` : ""}
     ${esCarne(an) ? (() => { const g = gananciaAnimal(an); return g.p.length ? `<div class="panel stack"><span class="eyebrow">Ganancia de peso</span><div class="facts small muted"><div>Gana por día<b>${g.gdp != null ? nf(g.gdp) + " g" : "–"}</b></div><div>Hoy ≈<b>${g.pesoHoy != null ? nf(g.pesoHoy) + " kg" : "–"}</b></div><div>Peso objetivo<b>${nf(g.objetivo)} kg${g.listo ? " ✓" : g.fechaSalida ? " · " + fmt(g.fechaSalida) : ""}</b></div></div>${sparkline(g.p.map((x) => ({ f: x.fecha, v: x.kg })), 280, 48)}</div>` : `<p class="small muted">Sin pesajes todavía. Pésela con báscula o cinta para ver cuánto gana por día.</p>`; })() : ""}
@@ -1963,7 +1965,7 @@ function resultadoSintomas(q) {
   const H = HS(), r = H.diagnosticar(q);
   const nombreS = (id) => (H.SINTOMAS.find((s) => s.id === id) || {}).t || id;
   sheet(cab("Posibles causas") + `
-    ${q.arete ? `<p class="small muted">Animal <span class="tag">${esc(q.arete)}</span>${q.diasPosparto != null ? ` · ${q.diasPosparto} días de parida` : ""}${q.ternero ? " · ternero" : ""}</p>` : ""}
+    ${q.arete ? `<p class="small muted">Animal <span class="tag">${esc(q.arete)}</span>${q.diasPosparto != null ? ` · ${q.diasPosparto} días en leche` : ""}${q.ternero ? " · ternero" : ""}</p>` : ""}
     ${r.alarmas.map((a) => `<div class="alerta bad"><span class="quien">Atención</span><span>${esc(a)}</span></div>`).join("")}
     ${r.posibles.length ? r.posibles.map((p, i) => { const u = H.URGENCIA[p.e.urg]; return `<button class="card" type="button" data-en="${p.e.id}">
         <div class="row spread"><b>${i + 1}. ${esc(p.e.n)}</b><span class="chip ${p.pct >= 70 ? "pren" : p.pct >= 40 ? "seca" : ""}">${p.pct >= 70 ? "Coincide mucho" : p.pct >= 40 ? "Coincide en parte" : "Posible"}</span></div>
@@ -2395,7 +2397,7 @@ function hojaVida(arete) {
     <div class="facts">
       <div>Estado<b>${esc(ESTADOS[an.estado] || an.estado)}</b></div><div>Edad<b>${edadTxt(an.nacimiento)}</b></div><div>Raza<b>${esc(an.raza || "–")}</b></div>
       ${est ? `<div style="grid-column:span 2">Reproducción<b>${esc(est)}</b></div><div>Partos<b>${c.nPartos}</b></div>
-      <div>${c.fpp ? "Parto probable" : "Último parto"}<b>${c.fpp ? fmt(c.fpp) : c.ultParto ? fmt(c.ultParto) : "–"}</b></div><div>Días parida<b>${c.del ?? "–"}</b></div><div>Leche<b>${lv ? nf(lv.l, 1) + " L/día" + (lv.medido ? "" : "*") : "–"}</b></div>` : `<div>Peso<b>${nf(w.kg)} kg</b></div><div>Madre<b>${esc(an.madre || "–")}</b></div><div>Padre<b>${esc(padre || "–")}</b></div>`}
+      <div>${c.fpp ? "Parto probable" : "Último parto"}<b>${c.fpp ? fmt(c.fpp) : c.ultParto ? fmt(c.ultParto) : "–"}</b></div><div>Días en leche<b>${c.del ?? "–"}</b></div><div>Leche<b>${lv ? nf(lv.l, 1) + " L/día" + (lv.medido ? "" : "*") : "–"}</b></div>` : `<div>Peso<b>${nf(w.kg)} kg</b></div><div>Madre<b>${esc(an.madre || "–")}</b></div><div>Padre<b>${esc(padre || "–")}</b></div>`}
     </div>
     <details class="hv-mas"><summary class="btn ghost block">Ver historia completa</summary><div class="stack" style="margin-top:12px">
     ${r ? `<div class="alerta bad"><span class="quien">Leche en retiro</span><span>No entregar hasta el ${fmt(r.retiroHasta)} inclusive${r.producto ? " · " + esc(r.producto) : ""}.</span></div>` : ""}
@@ -2466,7 +2468,7 @@ function porPalpar() {
     let prio = 3;
     if (c.prenada) prio = 4;
     else if (ds != null && /sin palpar/.test(est)) prio = ds >= 35 ? 1 : 2;
-    const motivo = c.prenada ? `${est}${c.fpp ? " · pare " + fmt(c.fpp) : ""}` : ds != null && /sin palpar/.test(est) ? `Servida hace ${ds} días${c.ultServ.toro ? " · toro " + c.ultServ.toro : c.ultServ.metodo === "ia" ? " · inseminada" : ""}${ds < 35 ? " (aún es pronto)" : ""}` : est + (c.ultParto && !c.prenada ? ` · ${diff(h, c.ultParto)} días de parida` : "");
+    const motivo = c.prenada ? `${est}${c.fpp ? " · pare " + fmt(c.fpp) : ""}` : ds != null && /sin palpar/.test(est) ? `Servida hace ${ds} días${c.ultServ.toro ? " · toro " + c.ultServ.toro : c.ultServ.metodo === "ia" ? " · inseminada" : ""}${ds < 35 ? " (aún es pronto)" : ""}` : est + (c.ultParto && !c.prenada ? ` · ${diff(h, c.ultParto)} días en leche` : "");
     return { an, c, prio, motivo };
   }).sort((a, b) => a.prio - b.prio || porArete(a.an, b.an));
 }
@@ -2917,6 +2919,19 @@ function backup() {
   const data = { app: "hato-claro", version: APP_VERSION, fecha: new Date().toISOString(), datos: Object.fromEntries(COLS.map((c) => [c, S[c]])) };
   descargar(`copia-hato-claro-${hoy()}.json`, new Blob([JSON.stringify(data)], { type: "application/json" }));
   toast("Copia descargada. Guárdela en un lugar seguro.");
+}
+function quitarCarga() {
+  const an = S.animales.filter((x) => x.importado), ev = S.eventos.filter((x) => x.importado);
+  const ar = new Set(an.map((a) => a.arete)), fo = S.fotos.filter((f) => ar.has(f.arete));
+  sheet(cab("Quitar los datos cargados") + `<p>Se borran los ${an.length} animales y ${ev.length} registros que vinieron en el archivo de carga${fo.length ? `, y ${fo.length} ${fo.length === 1 ? "foto" : "fotos"} de esos animales` : ""}.</p>
+    <p class="small muted">${nubeActiva() ? "Se borran de este celular y de la nube, y también desaparecen en los celulares de los demás. " : ""}Lo que se haya registrado a mano después no se borra; si vuelve a cargar los mismos animales, se les vuelve a unir.</p>
+    <button class="btn danger" type="button" id="qcOk">Quitar los datos cargados</button>`, (s) => {
+    $("#qcOk", s).onclick = function () { confirmar(this, "Toque otra vez para borrarlos", () => guardarYcerrar(async () => {
+      for (const e of ev) await del("eventos", e.id);
+      for (const f of fo) await del("fotos", f.id);
+      for (const a of an) await del("animales", a.id);
+    }, `Listo: se quitaron ${an.length} animales y ${ev.length} registros`)); };
+  });
 }
 function restaurar(file) {
   if (!file) return;

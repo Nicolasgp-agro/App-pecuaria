@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.10.1";
+const APP_VERSION = "2.10.2";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -2395,7 +2395,9 @@ function hojaVida(arete) {
   const crias = S.animales.filter((a) => a.madre === arete).sort(porArete);
   const hermanos = an.madre ? S.animales.filter((a) => a.madre === an.madre && a.arete !== arete).sort(porArete) : [];
   const madre = an.madre && S.animales.find((a) => a.arete === an.madre), padre = padreDe(an), est = estadoRepro(an, c);
-  const intervalo = partos.length >= 2 ? Math.round(avg(partos.slice(1).map((p, i) => diff(p.fecha, partos[i].fecha)))) : null;
+  const ieps = partos.slice(1).map((p, i) => diff(p.fecha, partos[i].fecha)).filter((d) => d >= 240);
+  const intervalo = ieps.length ? Math.round(avg(ieps)) : null, ultIep = ieps.length ? ieps[ieps.length - 1] : null;
+  const iepTxt = intervalo ? `${intervalo} días (${nf(intervalo / 30.4, 1)} meses)${ieps.length > 1 ? ` · el último ${ultIep}` : ""}` : null;
   const w = pesoAnimal(an), r = retiro(arete), foto = fotoDe(arete), lv = an.estado === "lactancia" ? litrosVaca(an) : null, pp1 = primerParto(an);
   const tag = (x) => `<button type="button" class="tagbtn" data-hv="${esc(x.arete)}"><span class="tag">${esc(x.arete)}</span> ${esc(x.nombre || "")}</button>`;
   const linea = (e) => { const d = detalleEv(e); return `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(etiquetaEvento(e))}</b>${d ? `<br><span class="small muted">${esc(d)}</span>` : ""}${botonEv(e)}</div>`; };
@@ -2408,6 +2410,7 @@ function hojaVida(arete) {
       <div>Estado<b>${esc(ESTADOS[an.estado] || an.estado)}</b></div><div>Edad<b>${edadTxt(an.nacimiento)}</b></div><div>Raza<b>${esc(an.raza || "–")}</b></div>
       ${est ? `<div style="grid-column:span 2">Reproducción<b>${esc(est)}</b></div><div>Partos<b>${c.nPartos}</b></div>
       <div>${c.fpp ? "Parto probable" : "Último parto"}<b>${c.fpp ? fmt(c.fpp) : c.ultParto ? fmt(c.ultParto) : "–"}</b></div><div>Días en leche<b>${c.del ?? "–"}</b></div><div>Leche<b>${lv ? nf(lv.l, 1) + " L/día" + (lv.medido ? "" : "*") : "–"}</b></div>
+      ${iepTxt ? `<div style="grid-column:span 3">Intervalo entre partos<b>${esc(iepTxt)}</b></div>` : ""}
       ${pp1 ? `<div style="grid-column:span 3">Edad al primer parto<b>${esc(pp1.txt)}</b></div>` : ""}` : `<div>Peso<b>${nf(w.kg)} kg</b></div><div>Madre<b>${esc(an.madre || "–")}</b></div><div>Padre<b>${esc(padre || "–")}</b></div>`}
     </div>
     <details class="hv-mas"><summary class="btn ghost block">Ver historia completa</summary><div class="stack" style="margin-top:12px">
@@ -2419,7 +2422,7 @@ function hojaVida(arete) {
     </div>
     ${est ? `<div class="panel stack"><span class="eyebrow">Reproducción</span>
       <div class="facts small muted"><div>Estado<b>${esc(est)}</b></div><div>Partos<b>${c.nPartos}</b></div><div>Último parto<b>${c.ultParto ? fmt(c.ultParto) : "–"}</b></div>
-        <div>Parto probable<b>${c.fpp ? fmt(c.fpp) : "–"}</b></div><div>Días abiertos<b>${c.dAbiertos ?? "–"}</b></div><div>Entre partos<b>${intervalo ? intervalo + " días" : "–"}</b></div>
+        <div>Parto probable<b>${c.fpp ? fmt(c.fpp) : "–"}</b></div><div>Días abiertos<b>${c.dAbiertos ?? "–"}</b></div><div>Intervalo entre partos<b>${intervalo ? intervalo + " días" : "–"}</b></div>
         <div style="grid-column:span 3">Edad al primer parto<b>${pp1 ? esc(pp1.txt) + " · " + fmt(pp1.fecha) : an.partosPrevios ? "– (parió antes de usar la app)" : !an.nacimiento ? "– (falta la fecha de nacimiento)" : "–"}</b></div></div>
       ${partos.length ? `<div class="timeline">${[...partos].reverse().map((p) => { const cr = p.cria && S.animales.find((a) => a.arete === p.cria); return `<div><span class="small muted">${fmt(p.fecha)}</span> · <b>${ordinalParto(p)}.º parto</b>${p.cria ? ` · cría ${cr ? tag(cr) : esc(p.cria)}${cr ? " " + (cr.sexo === "M" ? "macho" : "hembra") : ""}` : ""}${botonEv(p)}</div>`; }).join("")}</div>` : ""}
       ${an.partosPrevios ? `<span class="small muted">${an.partosPrevios} partos antes de usar la app.</span>` : ""}
@@ -2442,6 +2445,7 @@ function hojaVida(arete) {
       const L = [`*Hoja de vida · ${an.arete}${an.nombre ? " " + an.nombre : ""}*`, `${an.raza || "Raza sin dato"} · ${hembra ? "Hembra" : "Macho"} · ${edadTxt(an.nacimiento)} · ${ESTADOS[an.estado] || an.estado}`];
       if (an.madre || padre) L.push(`Madre: ${an.madre || "–"} · Padre: ${padre || "–"}`);
       if (pp1) L.push(`Edad al primer parto: ${pp1.txt}`);
+      if (iepTxt) L.push(`Intervalo entre partos: ${iepTxt}`);
       if (est) { L.push(`Partos: ${c.nPartos}${c.ultParto ? " · último " + fmt(c.ultParto) : ""}`); L.push(`Estado: ${est}${c.fpp ? " · parto probable " + fmt(c.fpp) : ""}`); }
       if (r) L.push(`Leche en retiro hasta ${fmt(r.retiroHasta)}`);
       if (repro.length) { L.push("", "Servicios y palpaciones:"); repro.slice(0, 6).forEach((e) => L.push(`- ${fmt(e.fecha)}: ${etiquetaEvento(e)}`)); }

@@ -168,3 +168,4 @@ details.panel>summary{list-style:none}details.panel>summary::-webkit-details-mar
 .hv-foto.vacia svg{width:40px;height:40px}
 details.hv-mas>summary{list-style:none;text-align:center}details.hv-mas>summary::-webkit-details-marker{display:none}
 details.hv-mas[open]>summary{display:none}
+.linkbtn{background:none;border:0;padding:2px 4px;margin-left:4px;color:var(--brand);font:inherit;font-size:.82rem;font-weight:700;text-decoration:underline;cursor:pointer}

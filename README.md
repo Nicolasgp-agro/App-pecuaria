@@ -14,8 +14,9 @@ Requisitos una sola vez: repositorio público y **Settings → Pages → Source:
 
 Al publicar una versión nueva hay que cambiar `VERSION` en `sw.js`; así los celulares que ya la tienen instalada reciben el aviso "Hay una versión nueva".
 
-## Qué hace (versión 2.8)
+## Qué hace (versión 2.9)
 
+- **Corregir sin perder historia:** se le puede cambiar el número a una res (por ejemplo al ponerle chapeta) y la app pasa sus registros, foto, crías y potreros al número nuevo; cada registro (parto, servicio, palpación, tratamiento, pesaje…) se puede editar o eliminar desde la ficha o la hoja de vida.
 - **Hato:** fichas, ciclos reproductivos, peso con cinta, valor y candidatas a descarte, buscador.
 - **Hatos o lotes:** varios hatos en la misma finca, animales con hato propio y ubicación actual, movimientos en lote y ruta en la hoja de vida.
 - **Varias fincas** con el mismo correo y **novedades** de lo que registran los demás.

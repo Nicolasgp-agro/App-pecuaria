@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.8.0";
+const APP_VERSION = "2.9.0";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -660,7 +660,7 @@ function formAnimal(an) {
   const e = an || {};
   sheet(cab(an ? "Editar res" : "Nueva res") + `
     <form id="fA" class="grid2">
-      <label class="f">Número o arete<input id="aArete" required value="${esc(e.arete || "")}" ${an ? "readonly" : ""} autocomplete="off"></label>
+      <label class="f">Número o arete<input id="aArete" required value="${esc(e.arete || "")}" autocomplete="off"></label>
       <label class="f">Nombre<input id="aNombre" value="${esc(e.nombre || "")}" autocomplete="off"></label>
       <label class="f">Raza<input id="aRaza" list="razas" value="${esc(e.raza || "")}"><datalist id="razas"><option>Holstein</option><option>Jersey</option><option>Normando</option><option>Ayrshire</option><option>Pardo Suizo</option><option>Gyr</option><option>Girolando</option><option>Cruce</option></datalist></label>
       <label class="f">Sexo<select id="aSexo"><option value="H">Hembra</option><option value="M"${e.sexo === "M" ? " selected" : ""}>Macho</option></select></label>
@@ -673,6 +673,7 @@ function formAnimal(an) {
       <label class="f" id="lParto">Fecha del último parto (si ya parió)<input type="date" id="aParto" max="${hoy()}"></label>
       <label class="f" id="lNPartos">Partos que lleva en total<input id="aNPartos" inputmode="numeric" value="${an ? ciclo(an).nPartos || "" : ""}" placeholder="0"></label>
       <label class="f full">Peso en kg (opcional; también puede medirlo con cinta desde la ficha)<input id="aPeso" inputmode="numeric" value="${e.peso ?? ""}"></label>
+      ${an ? `<p class="small muted full" id="aAviso">Si le cambia el número (por ejemplo, al ponerle la chapeta), la app pasa toda su historia, su foto y sus crías al número nuevo.</p>` : ""}
       <button class="btn full" type="submit">Guardar</button>
     </form>`, (s) => {
     const yaParto = () => an && evDe(an.arete).some((x) => x.tipo === "parto");
@@ -681,22 +682,83 @@ function formAnimal(an) {
     const verPartos = () => ($("#lNPartos", s).hidden = $("#aSexo", s).value === "M"); verPartos(); $("#aSexo", s).onchange = verPartos;
     $("#fA", s).onsubmit = (ev) => { ev.preventDefault();
       const arete = $("#aArete", s).value.trim(); if (!arete) return;
-      const id = slug(arete);
-      if (!an && S.animales.some((a) => a.id === id)) return toast("Ya existe una res con ese número");
+      const cambia = an && arete !== an.arete;
+      const id = cambia || !an ? slug(arete) : an.id;
+      if (S.animales.some((a) => a !== an && (a.id === id || a.arete === arete))) return toast("Ya existe una res con ese número");
       const data = { ...e, id, arete, nombre: $("#aNombre", s).value.trim(), raza: $("#aRaza", s).value.trim(), sexo: $("#aSexo", s).value, nacimiento: $("#aNac", s).value, estado: $("#aEstado", s).value, madre: $("#aMadre", s).value.trim(), origen: $("#aOrigen", s).value, proposito: $("#aProp", s).value || null };
       const hs = $("#aHato", s); if (hs) { if (hs.value) data.hato = hs.value; else delete data.hato; }
       const kg = pint($("#aPeso", s).value);
       if (kg && kg !== e.peso) Object.assign(data, { peso: kg, pesoFecha: hoy(), pesoMetodo: "bascula" });
       if (!kg) { delete data.peso; delete data.pesoFecha; delete data.pesoMetodo; }
+      if (cambia && !data.nombre && !/^\d+$/.test(an.arete)) data.nombre = an.arete;
+      const viejo = an ? an.arete : arete;
       const parto = $("#lParto", s).hidden ? "" : $("#aParto", s).value;
-      const nuevoParto = parto && !evDe(arete).some((x) => x.tipo === "parto" && x.fecha === parto);
-      const enApp = evDe(arete).filter((x) => x.tipo === "parto").length + (nuevoParto ? 1 : 0);
+      const nuevoParto = parto && !evDe(viejo).some((x) => x.tipo === "parto" && x.fecha === parto);
+      const enApp = evDe(viejo).filter((x) => x.tipo === "parto").length + (nuevoParto ? 1 : 0);
       const total = data.sexo === "M" ? 0 : pint($("#aNPartos", s).value) || 0;
       if (data.estado === "novilla" && (enApp > 0 || total > 0)) return toast("Esta ya parió: no puede ser novilla. Póngala En ordeño o Seca.");
       if (an && an.estado === "novilla" && data.estado === "lactancia" && !enApp && !total) return toast("Si ya está en ordeño es porque parió: ponga la fecha del parto o los partos que lleva.");
       data.partosPrevios = Math.max(0, total - enApp); if (!data.partosPrevios) delete data.partosPrevios;
-      guardarYcerrar(async () => { await save("animales", data); if (nuevoParto) await save("eventos", { id: uid(), arete, tipo: "parto", fecha: parto, nota: an ? "Registrado al editar la res" : "Registrado al ingresar la res" }); }, "Res guardada");
+      guardarYcerrar(async () => { await save("animales", data); if (cambia) await cambiarNumero(an, data); if (nuevoParto) await save("eventos", { id: uid(), arete, tipo: "parto", fecha: parto, nota: an ? "Registrado al editar la res" : "Registrado al ingresar la res" }); }, cambia ? `Listo: ahora es la ${arete}` : "Res guardada");
     };
+  });
+}
+
+// Cambia el número de una res y pasa al número nuevo todo lo que la nombra
+async function cambiarNumero(an, nueva) {
+  const viejo = an.arete, nuevo = nueva.arete;
+  if (an.id !== nueva.id) await del("animales", an.id);
+  for (const e of S.eventos.filter((e) => e.arete === viejo || e.cria === viejo || e.toro === viejo))
+    await save("eventos", { ...e, ...(e.arete === viejo ? { arete: nuevo } : {}), ...(e.cria === viejo ? { cria: nuevo } : {}), ...(e.toro === viejo ? { toro: nuevo } : {}) });
+  for (const a of S.animales.filter((a) => a.madre === viejo)) await save("animales", { ...a, madre: nuevo });
+  for (const o of S.ocupaciones.filter((o) => (o.animales || []).includes(viejo))) await save("ocupaciones", { ...o, animales: o.animales.map((x) => (x === viejo ? nuevo : x)) });
+  const f = fotoDe(viejo);
+  if (f) { await save("fotos", { ...f, id: nueva.id, arete: nuevo }); if (f.id !== nueva.id) await del("fotos", f.id); }
+}
+
+/* corregir o borrar un registro ya guardado */
+const puedeEditarEv = (e) => e && (e.tipo !== "venta" || puedeVerPlata());
+const botonEv = (e) => (puedeEditarEv(e) ? ` <button type="button" class="linkbtn" data-ev="${esc(e.id)}">Editar</button>` : "");
+function formEditarEvento(e, volver) {
+  if (!puedeEditarEv(e)) return;
+  const t = e.tipo, plata = puedeVerPlata();
+  const campo = (id, label, val, extra = "") => `<label class="f">${label}<input id="${id}" value="${esc(val ?? "")}" ${extra} autocomplete="off"></label>`;
+  sheet(cab("Editar registro") + `<p class="small muted"><span class="tag">${esc(e.arete)}</span> <b>${esc(etiquetaEvento(e))}</b>${e.estimado ? " · fecha estimada a partir del parto" : ""}${e.por ? " · registró " + esc(e.por.split("@")[0]) : ""}</p>
+    <form id="fEv" class="grid2">
+      <label class="f">Fecha<input type="date" id="evF" value="${esc(e.fecha || "")}" max="${hoy()}" required></label>
+      ${t === "servicio" ? `<label class="f">Cómo fue<select id="evM"><option value="monta">Monta (toro)</option><option value="ia"${e.metodo === "ia" ? " selected" : ""}>Inseminación</option></select></label>
+        ${campo("evT", "Toro", e.toro, 'list="evToros"')}<datalist id="evToros">${toros().map((x) => `<option value="${esc(x.arete)}">${esc(x.nombre || "")}</option>`).join("")}</datalist>` : ""}
+      ${t === "prenez" ? campo("evMe", "Meses de preñez", e.meses, 'inputmode="numeric"') : ""}
+      ${["tratamiento", "vacuna"].includes(t) ? campo("evP", "Producto", e.producto) : ""}
+      ${t === "tratamiento" ? campo("evR", "Días de retiro de leche", e.retiroDias, 'inputmode="numeric"') : ""}
+      ${t === "leche" ? campo("evL", "Litros", e.litros, 'inputmode="decimal"') : ""}
+      ${t === "peso" ? campo("evK", "Kilos", e.kg, 'inputmode="numeric"') : ""}
+      ${t === "obs" ? campo("evO", "Qué se vio", e.obs) : ""}
+      ${t === "venta" && plata ? campo("evV", "Valor ($)", e.valor, 'inputmode="numeric"') : ""}
+      <label class="f full">Nota<input id="evN" value="${esc(e.nota || "")}" autocomplete="off"></label>
+      ${t === "parto" ? `<p class="small muted full">Si borra un parto, la cría sigue en el hato. Revise después el estado de la vaca.</p>` : ""}
+      <button class="btn full" type="submit">Guardar</button>
+      <button class="btn ghost full" type="button" id="evDel">Eliminar este registro</button>
+    </form>`, (s) => {
+    const fin = () => { if (volver) volver(); };
+    $("#fEv", s).onsubmit = (ev) => { ev.preventDefault();
+      const fecha = $("#evF", s).value; if (!fecha) return toast("Ponga la fecha");
+      const o = { ...e, fecha, nota: $("#evN", s).value.trim(), editado: hoy() };
+      const yo = quienSoy(); if (yo) o.editadoPor = yo;
+      if (fecha !== e.fecha) delete o.estimado;
+      const val = (id) => { const x = $("#" + id, s); return x ? x.value.trim() : null; };
+      if (t === "servicio") { o.metodo = val("evM"); const tr = val("evT"); if (o.metodo === "monta" && tr) o.toro = tr; else delete o.toro; }
+      if (t === "prenez") { const m = pint(val("evMe")); if (m) o.meses = m; else delete o.meses; }
+      if (["tratamiento", "vacuna"].includes(t)) o.producto = val("evP");
+      if (t === "tratamiento") { const r = pint(val("evR")); if (r != null) { o.retiroDias = r; o.retiroHasta = add(fecha, r); } else { delete o.retiroDias; delete o.retiroHasta; } }
+      if (t === "leche") { const l = pn(val("evL")); if (!l) return toast("Ponga los litros"); o.litros = l; }
+      if (t === "peso") { const k = pint(val("evK")); if (!k) return toast("Ponga los kilos"); o.kg = k; }
+      if (t === "obs") o.obs = val("evO") || e.obs;
+      if (t === "venta" && plata) o.valor = pint(val("evV"));
+      if (!o.nota) delete o.nota;
+      guardarYcerrar(() => save("eventos", o), "Registro corregido").then(fin);
+    };
+    $("#evDel", s).onclick = function () { confirmar(this, "Toque otra vez para eliminarlo", () => guardarYcerrar(() => del("eventos", e.id), "Registro eliminado").then(fin)); };
   });
 }
 
@@ -852,10 +914,11 @@ function detalle(arete) {
       <button class="accion" type="button" data-x="foto"><b>📷 Foto</b></button>
       ${hatosLista().length ? `<button class="accion" type="button" data-x="mover"><b>Mover de hato</b></button>` : ""}
     </div>
-    <div><span class="eyebrow">Historial</span><div class="timeline" style="margin-top:8px">${ev.length ? ev.map((e) => `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(etiquetaEvento(e))}</b>${e.cria ? ` (cría ${esc(e.cria)})` : ""}${e.producto ? " · " + esc(e.producto) : ""}${e.retiroHasta ? ` · retiro hasta ${fmt(e.retiroHasta)}` : ""}${e.kg ? ` · ${nf(e.kg)} kg` : ""}${e.litros ? ` · ${nf(e.litros, 1)} L` : ""}${e.valor && plata ? ` · ${pesos(e.valor)}` : ""}${e.tipo === "salud" && e.posibles ? `<br><span class="small">Posibles: ${esc(e.posibles.slice(0, 3).join(", ") || "sin coincidencias")}</span>` : ""}${e.nota || e.por || e.quien ? `<br><span class="small muted">${esc([e.quien ? "palpó " + e.quien : "", e.nota || "", e.por ? "por " + e.por.split("@")[0] : ""].filter(Boolean).join(" · "))}</span>` : ""}</div>`).join("") : '<div class="muted">Sin registros.</div>'}</div></div>
+    <div><span class="eyebrow">Historial</span><div class="timeline" style="margin-top:8px">${ev.length ? ev.map((e) => `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(etiquetaEvento(e))}</b>${e.cria ? ` (cría ${esc(e.cria)})` : ""}${e.producto ? " · " + esc(e.producto) : ""}${e.retiroHasta ? ` · retiro hasta ${fmt(e.retiroHasta)}` : ""}${e.kg ? ` · ${nf(e.kg)} kg` : ""}${e.litros ? ` · ${nf(e.litros, 1)} L` : ""}${e.valor && plata ? ` · ${pesos(e.valor)}` : ""}${e.tipo === "salud" && e.posibles ? `<br><span class="small">Posibles: ${esc(e.posibles.slice(0, 3).join(", ") || "sin coincidencias")}</span>` : ""}${e.nota || e.por || e.quien ? `<br><span class="small muted">${esc([e.quien ? "palpó " + e.quien : "", e.nota || "", e.por ? "por " + e.por.split("@")[0] : ""].filter(Boolean).join(" · "))}</span>` : ""}${botonEv(e)}</div>`).join("") : '<div class="muted">Sin registros.</div>'}</div></div>
     <div class="row"><button class="btn ghost sm" type="button" data-x="editar">Editar datos</button>${plata ? `<button class="btn ghost sm" type="button" data-x="vender">${an.estado === "vendida" ? "Ya vendida" : "Vender"}</button><button class="btn ghost sm" type="button" data-x="borrar">Eliminar</button>` : ""}</div>`,
   (s) => {
     $$("[data-n]", s).forEach((b) => (b.onclick = async () => { await save("animales", { ...an, nivel: b.dataset.n }); toast("Producción actualizada"); render(); detalle(arete); }));
+    $$("[data-ev]", s).forEach((b) => (b.onclick = () => formEditarEvento(S.eventos.find((x) => x.id === b.dataset.ev), () => detalle(arete))));
     $$("[data-x]", s).forEach((b) => (b.onclick = function () {
       const x = b.dataset.x;
       if (x === "editar") formAnimal(an);
@@ -2323,7 +2386,7 @@ function hojaVida(arete) {
   const intervalo = partos.length >= 2 ? Math.round(avg(partos.slice(1).map((p, i) => diff(p.fecha, partos[i].fecha)))) : null;
   const w = pesoAnimal(an), r = retiro(arete), foto = fotoDe(arete), lv = an.estado === "lactancia" ? litrosVaca(an) : null;
   const tag = (x) => `<button type="button" class="tagbtn" data-hv="${esc(x.arete)}"><span class="tag">${esc(x.arete)}</span> ${esc(x.nombre || "")}</button>`;
-  const linea = (e) => { const d = detalleEv(e); return `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(etiquetaEvento(e))}</b>${d ? `<br><span class="small muted">${esc(d)}</span>` : ""}</div>`; };
+  const linea = (e) => { const d = detalleEv(e); return `<div><span class="small muted">${fmt(e.fecha)}</span> · <b>${esc(etiquetaEvento(e))}</b>${d ? `<br><span class="small muted">${esc(d)}</span>` : ""}${botonEv(e)}</div>`; };
   const seccion = (titulo, lista, max = 12) => lista.length ? `<div class="panel stack"><span class="eyebrow">${titulo}</span><div class="timeline">${lista.slice(0, max).map(linea).join("")}</div>${lista.length > max ? `<span class="small muted">y ${lista.length - max} registros más antiguos</span>` : ""}</div>` : "";
   sheet(`<div class="row spread"><div class="row" style="gap:8px"><span class="tag">${esc(an.arete)}</span><h2>${esc(nombreVisible(an))}</h2></div><button class="btn ghost sm" data-close type="button">Cerrar</button></div>
     ${foto ? `<button type="button" class="hv-foto" id="hvFoto" aria-label="Cambiar foto"><img src="${foto.img}" alt="Foto de ${esc(an.arete)}"></button>` : `<button type="button" class="hv-foto vacia" id="hvFoto">${ICONO_RES}<span>Agregar foto</span></button>`}
@@ -2344,7 +2407,7 @@ function hojaVida(arete) {
     ${est ? `<div class="panel stack"><span class="eyebrow">Reproducción</span>
       <div class="facts small muted"><div>Estado<b>${esc(est)}</b></div><div>Partos<b>${c.nPartos}</b></div><div>Último parto<b>${c.ultParto ? fmt(c.ultParto) : "–"}</b></div>
         <div>Parto probable<b>${c.fpp ? fmt(c.fpp) : "–"}</b></div><div>Días abiertos<b>${c.dAbiertos ?? "–"}</b></div><div>Entre partos<b>${intervalo ? intervalo + " días" : "–"}</b></div></div>
-      ${partos.length ? `<div class="timeline">${[...partos].reverse().map((p) => { const cr = p.cria && S.animales.find((a) => a.arete === p.cria); return `<div><span class="small muted">${fmt(p.fecha)}</span> · <b>${ordinalParto(p)}.º parto</b>${p.cria ? ` · cría ${cr ? tag(cr) : esc(p.cria)}${cr ? " " + (cr.sexo === "M" ? "macho" : "hembra") : ""}` : ""}</div>`; }).join("")}</div>` : ""}
+      ${partos.length ? `<div class="timeline">${[...partos].reverse().map((p) => { const cr = p.cria && S.animales.find((a) => a.arete === p.cria); return `<div><span class="small muted">${fmt(p.fecha)}</span> · <b>${ordinalParto(p)}.º parto</b>${p.cria ? ` · cría ${cr ? tag(cr) : esc(p.cria)}${cr ? " " + (cr.sexo === "M" ? "macho" : "hembra") : ""}` : ""}${botonEv(p)}</div>`; }).join("")}</div>` : ""}
       ${an.partosPrevios ? `<span class="small muted">${an.partosPrevios} partos antes de usar la app.</span>` : ""}
     </div>` : ""}
     ${seccion("Servicios y palpaciones", repro)}
@@ -2358,6 +2421,7 @@ function hojaVida(arete) {
     <div class="row"><button class="btn" type="button" id="hvFicha">Registrar algo</button><button class="btn ghost" type="button" id="hvCompartir">Enviar por WhatsApp</button></div>`,
   (s) => {
     $$("[data-hv]", s).forEach((b) => (b.onclick = () => hojaVida(b.dataset.hv)));
+    $$("[data-ev]", s).forEach((b) => (b.onclick = () => formEditarEvento(S.eventos.find((x) => x.id === b.dataset.ev), () => hojaVida(arete))));
     $("#hvFoto", s).onclick = () => (foto ? opcionesFoto(an, () => hojaVida(arete)) : pedirFoto(an, () => hojaVida(arete), true));
     $("#hvFicha", s).onclick = () => detalle(arete);
     $("#hvCompartir", s).onclick = () => {

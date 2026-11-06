@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.10.2";
+const APP_VERSION = "2.10.3";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -214,6 +214,17 @@ function primerParto(an) {
   const m = Math.round(d / 30.4), a = Math.floor(m / 12), r = m % 12;
   return { fecha: p.fecha, meses: m, txt: `${m} meses${a ? ` (${a} ${a === 1 ? "año" : "años"}${r ? " y " + r + (r === 1 ? " mes" : " meses") : ""})` : ""}` };
 }
+// Intervalos entre partos de una vaca (en días), descartando registros duplicados o muy seguidos
+const iepsDe = (arete) => { const p = evDe(arete).filter((e) => e.tipo === "parto"); return p.slice(1).map((x, i) => diff(x.fecha, p[i].fecha)).filter((d) => d >= 240); };
+// Indicador del hato: promedio del último intervalo de cada vaca activa
+function iepHato(vivos) {
+  const ult = vivos.filter((a) => ["lactancia", "seca"].includes(a.estado)).map((a) => iepsDe(a.arete).pop()).filter((d) => d != null);
+  return ult.length ? { dias: Math.round(avg(ult)), n: ult.length } : null;
+}
+function edadPrimerPartoHato(vivos) {
+  const l = vivos.map(primerParto).filter(Boolean);
+  return l.length ? { meses: Math.round(avg(l.map((x) => x.meses))), n: l.length } : null;
+}
 function edadTxt(nac) { if (!nac) return "–"; const d = diff(hoy(), nac); return d < 730 ? ((m) => (m === 1 ? "1 mes" : m + " meses"))(Math.max(0, Math.round(d / 30.4))) : (d / 365.25).toFixed(1).replace(".", ",") + " años"; }
 
 /* ---------- vistas ---------- */
@@ -331,6 +342,10 @@ function vHato() {
     <div class="row spread"><div><h2>${hatoValido() ? esc(nombreHato(hatoSel)) : "Hato"} · ${vivos.length} ${vivos.length === 1 ? "animal" : "animales"}</h2>${hatosLista().length ? `<button class="btn ghost sm" type="button" id="hMover" style="margin-top:4px">Mover animales</button>` : `<button class="btn ghost sm" type="button" id="hHatos" style="margin-top:4px">¿Varios hatos o lotes?</button>`}</div><button class="btn sm" id="hNuevo" type="button">+ Nueva res</button></div>
     ${vivos.length ? `<div class="stack" style="gap:6px"><span class="eyebrow">Por estado</span><div class="tablero">${EST.map(([k, v]) => { const l = vivos.filter((a) => a.estado === k); return l.length || ["lactancia", "seca"].includes(k) ? tile(k, v, l, vivos.length ? Math.round((l.length / vivos.length) * 100) + "% del hato" : "") : ""; }).join("")}</div></div>
     <div class="stack" style="gap:6px"><span class="eyebrow">Reproducción</span><div class="tablero">${Object.entries(ESP).map(([k, [v, f]]) => { const l = grupo(f); return tile("@" + k, v, l, k === "prenadas" && adultas ? Math.round((l.length / adultas) * 100) + "% de vacas" : ""); }).join("")}${fuera.length ? tile("@fuera", "De este hato, en otro lugar", fuera, "") : ""}</div></div>
+    ${(() => { const iep = iepHato(vivos), ep = edadPrimerPartoHato(vivos); return iep || ep ? `<div class="stack" style="gap:6px"><span class="eyebrow">Indicadores</span><div class="tablero">
+      ${iep ? `<div class="tile" style="cursor:default"><b>${iep.dias}<span style="font-size:.9rem;font-weight:600"> días</span></b><span>Intervalo entre partos</span><small>${nf(iep.dias / 30.4, 1)} meses · promedio de ${iep.n} ${iep.n === 1 ? "vaca" : "vacas"} (su último intervalo)</small></div>` : ""}
+      ${ep ? `<div class="tile" style="cursor:default"><b>${ep.meses}<span style="font-size:.9rem;font-weight:600"> meses</span></b><span>Edad al primer parto</span><small>promedio de ${ep.n} ${ep.n === 1 ? "vaca" : "vacas"}</small></div>` : ""}
+    </div></div>` : ""; })()}
 ` : ""}
     <div class="row" style="gap:8px;flex-wrap:nowrap"><input type="search" id="hBusca" placeholder="Buscar por número o nombre" value="${esc(buscaHato)}" autocomplete="off" aria-label="Buscar animal" style="flex:1">${window.SpeechRecognition || window.webkitSpeechRecognition ? `<button class="btn ghost" type="button" id="hMic" aria-label="Buscar hablando" style="flex:none">🎙</button>` : ""}</div>
     <div class="row spread"><b id="hTit"></b><span class="row" style="gap:6px">${filtroHato ? `<button class="btn ghost sm" type="button" data-f="">Ver todos</button>` : ""}${nVend && filtroHato !== "vendida" ? `<button class="btn ghost sm" type="button" data-f="vendida">Ya no están (${nVend})</button>` : ""}</span></div>
@@ -1185,14 +1200,14 @@ function gastosMes(m) {
   S.gastos.filter((g) => !g.ajuste).forEach((g) => { const v = parteEnMes(g, m); if (v) filas.push({ ...g, valor: v, total: g.valor, reparto: rango(g), origen: "manual" }); });
   const conAjuste = (r) => {
     const a = S.gastos.find((g) => g.ajuste && g.id === r.id);
-    if (!a) { if (enMes(r.fecha, m)) filas.push(r); return; }
+    if (!a) { const v = parteEnMes(r, m); if (v) filas.push({ ...r, valor: v, total: r.valor }); return; }
     if (a.excluido) return;
-    const tot = a.valor ?? r.valor, v = parteEnMes({ fecha: r.fecha, hasta: a.hasta, valor: tot }, m);
+    const tot = a.valor ?? r.valor, v = parteEnMes({ fecha: r.fecha, hasta: a.hasta || r.hasta, valor: tot }, m);
     if (v) filas.push({ ...r, categoria: a.categoria || r.categoria, descripcion: a.descripcion || r.descripcion, valor: v, total: tot, hasta: a.hasta, reparto: rango({ fecha: r.fecha, hasta: a.hasta }), potreroId: a.potreroId || null, editado: true, original: r.valor });
   };
-  S.liquidaciones.filter((l) => enMes(l.hasta, m) || S.gastos.some((g) => g.ajuste && g.hasta && g.id.startsWith(`col-${l.id}-`))).forEach((l) => {
-    (l.compras || []).forEach((c) => c.valor && conAjuste({ id: `col-${l.id}-${c.grupo}`, fecha: l.hasta, categoria: CAT_COLANTA(c.grupo), descripcion: `Agrocolanta sem. ${l.semana}: ${capital(c.grupo)}${c.kg ? ` (${nf(c.kg)} kg)` : ""}`, valor: c.valor, origen: "colanta" }));
-    (l.deducciones || []).filter((d) => /FOMENTO/i.test(d.concepto)).forEach((d) => conAjuste({ id: `col-${l.id}-fomento`, fecha: l.hasta, categoria: "Cuotas y parafiscales", descripcion: `Cuota de fomento sem. ${l.semana}`, valor: d.valor, origen: "colanta" }));
+  S.liquidaciones.filter((l) => enMes(l.hasta, m) || (l.desde && enMes(l.desde, m)) || S.gastos.some((g) => g.ajuste && g.hasta && g.id.startsWith(`col-${l.id}-`))).forEach((l) => {
+    (l.compras || []).forEach((c) => c.valor && conAjuste({ id: `col-${l.id}-${c.grupo}`, fecha: l.desde || l.hasta, hasta: l.hasta, categoria: CAT_COLANTA(c.grupo), descripcion: `Agrocolanta sem. ${l.semana}: ${capital(c.grupo)}${c.kg ? ` (${nf(c.kg)} kg)` : ""}`, valor: c.valor, origen: "colanta" }));
+    (l.deducciones || []).filter((d) => /FOMENTO/i.test(d.concepto)).forEach((d) => conAjuste({ id: `col-${l.id}-fomento`, fecha: l.desde || l.hasta, hasta: l.hasta, categoria: "Cuotas y parafiscales", descripcion: `Cuota de fomento sem. ${l.semana}`, valor: d.valor, origen: "colanta" }));
   });
   const cc = cfgCostos();
   if (m <= hoy().slice(0, 7)) {
@@ -1217,10 +1232,11 @@ function vPlata() {
   const maxCat = Math.max(1, ...Object.values(r.porCat));
   const hist = []; for (let i = 5; i >= 0; i--) hist.push(resumenMes(mesMas(mesPlata, -i)));
   const util = r.utilidad, utilL = r.litros ? util / r.litros : null;
+  const sinLecheAun = !r.litros && mesPlata === hoy().slice(0, 7) && S.entregas.length > 0;
   el.innerHTML = `
     <div class="row spread"><button class="btn ghost sm" id="pPrev" type="button" aria-label="Mes anterior">‹</button><h2>${nombreMes(mesPlata)}</h2><button class="btn ghost sm" id="pNext" type="button" aria-label="Mes siguiente" ${mesPlata >= hoy().slice(0, 7) ? "disabled" : ""}>›</button></div>
     <div class="kpis">
-      <div class="kpi hero"><div><span class="eyebrow">Ganancia del mes</span><b class="num" style="color:var(${util >= 0 ? "--ok" : "--bad"})">${r.litros || r.gastos ? pesos(util) : "–"}</b><span class="small muted">${utilL != null ? `${pesos(utilL)} por litro` : "Registre leche y gastos para calcularla"}</span></div>
+      <div class="kpi hero"><div><span class="eyebrow">Ganancia del mes</span><b class="num" style="color:var(${sinLecheAun ? "--fg" : util >= 0 ? "--ok" : "--bad"})">${sinLecheAun ? "–" : r.litros || r.gastos ? pesos(util) : "–"}</b><span class="small muted">${sinLecheAun ? `Todavía no hay leche registrada este mes (Colanta la liquida a la semana siguiente). Por ahora van ${pesos(r.gastos)} en gastos.` : utilL != null ? `${pesos(utilL)} por litro` : "Registre leche y gastos para calcularla"}</span></div>
         <button class="btn" id="pGasto" type="button">+ Gasto</button></div>
       <div class="kpi"><span class="eyebrow">Costo por litro</span><b>${r.costoL != null ? pesos(r.costoL) : "–"}</b><span class="small muted">${r.precioL ? `le pagan ${pesos(r.precioL)}` : "&nbsp;"}</span></div>
       <div class="kpi"><span class="eyebrow">Leche</span><b>${nf(r.litros)} L</b><span class="small muted">${pesos(r.ingreso)}${r.estimado ? " aprox." : ""}</span></div>
@@ -2395,7 +2411,7 @@ function hojaVida(arete) {
   const crias = S.animales.filter((a) => a.madre === arete).sort(porArete);
   const hermanos = an.madre ? S.animales.filter((a) => a.madre === an.madre && a.arete !== arete).sort(porArete) : [];
   const madre = an.madre && S.animales.find((a) => a.arete === an.madre), padre = padreDe(an), est = estadoRepro(an, c);
-  const ieps = partos.slice(1).map((p, i) => diff(p.fecha, partos[i].fecha)).filter((d) => d >= 240);
+  const ieps = iepsDe(arete);
   const intervalo = ieps.length ? Math.round(avg(ieps)) : null, ultIep = ieps.length ? ieps[ieps.length - 1] : null;
   const iepTxt = intervalo ? `${intervalo} días (${nf(intervalo / 30.4, 1)} meses)${ieps.length > 1 ? ` · el último ${ultIep}` : ""}` : null;
   const w = pesoAnimal(an), r = retiro(arete), foto = fotoDe(arete), lv = an.estado === "lactancia" ? litrosVaca(an) : null, pp1 = primerParto(an);

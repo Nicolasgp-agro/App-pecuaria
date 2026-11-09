@@ -56,3 +56,12 @@ Al publicar una versión nueva hay que cambiar `VERSION` en `sw.js`; así los ce
 | `vendor/supabase.js` | Cliente de Supabase 2.45.4 para la nube |
 | `supabase/esquema.sql`, `supabase/GUIA.md` | Base de datos de la nube con sus reglas de seguridad, y la guía para activarla |
 | `icons/` | Íconos de la app |
+
+## Surco Claro (carpeta `surco/`)
+
+App hermana para cultivos: lotes, siembras, jornales, insumos (semilla, abonos, fumigos), maquinaria, ventas y fotos de facturas, con resumen de costos, costo por bulto y utilidad. Se publica junto con Hato Claro en `https://nicolasgp-agro.github.io/App-pecuaria/surco/` y se instala igual (Chrome: **Instalar app**; Safari: **Compartir → Agregar a inicio**).
+
+- Guarda todo en el celular y funciona sin señal. Desde **Más** se descarga en Excel o como copia de seguridad.
+- Nube opcional: usa la misma nube de Hato Claro (`nube.json`, mismas fincas y códigos de invitación). Sus datos van en la tabla `registros` con colecciones que empiezan por `surco_`.
+- Para las fotos en la nube hay que correr una vez `supabase/surco-fotos.sql` en el SQL Editor de Supabase. Sin eso, las fotos quedan en el celular donde se tomaron.
+- Al publicar una versión nueva, cambiar `VERSION` en `surco/sw.js`.

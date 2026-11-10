@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.10.6";
+const APP_VERSION = "2.10.7";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -2082,6 +2082,7 @@ async function sincronizar({ silencioso = true } = {}) {
     let desde = n.ultimoPull ? new Date(new Date(n.ultimoPull).getTime() - 120000).toISOString() : null, ultimo = n.ultimoPull;
     for (let vuelta = 0; vuelta < 50; vuelta++) {
       const filas = await r.bajar(finca, desde);
+      if (nubeCfg().fincaId !== finca) throw new Error("Cambió de finca durante la sincronización");
       for (const f of filas) {
         if (!COLS.includes(f.coleccion) || !sincroniza(f.coleccion, f.id) || pendientes.has(f.coleccion + "|" + f.id)) continue;
         const local = S[f.coleccion].find((x) => x.id === f.id);
@@ -2091,10 +2092,11 @@ async function sincronizar({ silencioso = true } = {}) {
       if (filas.length) { ultimo = filas[filas.length - 1].actualizado; desde = ultimo; }
       if (filas.length < 1000) break;
     }
+    if (nubeCfg().fincaId !== finca) throw new Error("Cambió de finca durante la sincronización");
     await guardarNube({ ultimoPull: ultimo, ultimaSync: new Date().toISOString(), error: null });
     colaPend = (await leerCola()).length;
   } catch (e) {
-    await guardarNube({ error: String(e.message || e) });
+    if (!/Cambió de finca/.test(e.message || "")) await guardarNube({ error: String(e.message || e) });
     try { colaPend = (await leerCola()).length; } catch (x) {}
     if (!silencioso) toast("No se pudo sincronizar: " + (e.message || e));
   } finally { sincronizando = false; }
@@ -2107,6 +2109,7 @@ async function encolarTodo() {
 }
 async function conectarFinca(f, modo) {
   // modo: "subir" (esta finca local va a la nube), "bajar" (reemplazar lo local con lo de la nube)
+  for (let i = 0; sincronizando && i < 150; i++) await new Promise((r) => setTimeout(r, 200)); // que termine la sincronización en curso
   if (modo === "bajar") await vaciarTodo(CONFIG_LOCAL);
   await guardarNube({ fincaId: f.id, fincaNombre: f.nombre, rol: f.rol, email: sesion && sesion.email, ultimoPull: null, error: null });
   try { localStorage.setItem("hc-visto-" + f.id, new Date().toISOString()); } catch (e) {}
@@ -2138,6 +2141,7 @@ function panelNube() {
       ${n.rol === "dueno" ? `<button class="btn ghost" type="button" id="nuInvitar">Invitar a alguien</button>` : ""}
       <button class="btn ghost" type="button" id="nuMiembros">Ver quiénes están</button>
       <button class="btn ghost" type="button" id="nuCambiar">Cambiar de finca o agregar otra</button>
+      <button class="btn ghost" type="button" id="nuRebajar">Volver a bajar todo de la nube</button>
       <button class="btn ghost" type="button" id="nuSalir">Salir de la cuenta</button>
       <p class="small muted">${esc(sesion.email)}</p></div>`;
 }
@@ -2145,6 +2149,16 @@ function enlazarNube(el) {
   const b = (id, fn) => { const x = $(id, el); if (x) x.onclick = fn; };
   b("#nuEntrar", formEntrar); b("#nuFinca", elegirFinca); b("#nuSync", async () => { const c = await sincronizar({ silencioso: false }); toast(c ? `${c} cambios recibidos` : "Todo al día"); });
   b("#nuInvitar", formInvitar); b("#nuMiembros", verMiembros); b("#nuCambiar", cambiarFinca);
+  b("#nuRebajar", async function () {
+    confirmar(this, "Toque otra vez: este celular queda igual a la nube", async () => {
+      if (navigator.onLine === false) return toast("Necesita señal");
+      await sincronizar({ silencioso: false });
+      if ((await leerCola()).length) return toast("Hay registros sin enviar. Intente cuando tenga buena señal.");
+      const n = nubeCfg(); toast("Bajando todo de la nube…");
+      await conectarFinca({ id: n.fincaId, nombre: n.fincaNombre, rol: n.rol }, "bajar");
+      toast("Listo: este celular quedó igual a la nube"); render();
+    });
+  });
   b("#nuSalir", async function () { confirmar(this, "Toque otra vez para salir", async () => { try { await (await remoto()).salir(); } catch (e) {} sesion = null; await guardarNube({ fincaId: null, fincaNombre: "", rol: null, ultimoPull: null }); if (!memOnly) await tx("cola", "readwrite", (st) => st.clear()); toast("Salió de la cuenta. Los datos siguen en este celular."); render(); }); });
 }
 function formEntrar() {

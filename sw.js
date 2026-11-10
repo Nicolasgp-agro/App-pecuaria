@@ -1,6 +1,6 @@
 // Hato Claro — service worker: guarda la app en el celular para usarla sin señal.
 // Cambia VERSION en cada publicación para que los celulares reciban la actualización.
-const VERSION = "hc-2026-11-09-6";
+const VERSION = "hc-2026-11-09-7";
 const ARCHIVOS = [
   "./",
   "./index.html",
@@ -25,7 +25,8 @@ const ARCHIVOS = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ARCHIVOS)));
+  // cache: "reload" baja cada archivo del servidor y no de la memoria del navegador (si no, a veces guardaba el app.js viejo)
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ARCHIVOS.map((u) => new Request(u, { cache: "reload" })))));
 });
 
 self.addEventListener("activate", (e) => {

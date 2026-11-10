@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.10.8";
+const APP_VERSION = "2.10.9";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -3143,11 +3143,16 @@ async function cargarEjemplo() {
 /* ---------- arranque ---------- */
 function registrarSW() {
   if (!("serviceWorker" in navigator)) return;
-  navigator.serviceWorker.register("sw.js").then((reg) => {
-    const mostrar = (w) => { $("#avisoUpdate").hidden = false; $("#btnUpdate").onclick = () => w.postMessage("ACTUALIZAR"); };
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((reg) => {
+    // Versión nueva lista: si no está llenando un formulario, se aplica sola; si está en uno, sale el aviso para no perder lo escrito
+    const mostrar = (w) => {
+      if (!document.querySelector(".sheet")) return w.postMessage("ACTUALIZAR");
+      $("#avisoUpdate").hidden = false; $("#btnUpdate").onclick = () => w.postMessage("ACTUALIZAR");
+    };
     if (reg.waiting && navigator.serviceWorker.controller) mostrar(reg.waiting);
     reg.addEventListener("updatefound", () => { const w = reg.installing; w && w.addEventListener("statechange", () => { if (w.state === "installed" && navigator.serviceWorker.controller) mostrar(w); }); });
-    setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+    setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
   }).catch(() => {});
   let recargando = false; const habiaControlador = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener("controllerchange", () => { if (recargando || !habiaControlador) return; recargando = true; location.reload(); });

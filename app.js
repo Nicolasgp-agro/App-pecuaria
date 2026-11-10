@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.10.5";
+const APP_VERSION = "2.10.6";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -609,7 +609,7 @@ function vMas() {
       ${nEj ? `<p class="muted">Hay ${nEj} registros de ejemplo mezclados con los suyos.</p><button class="btn ghost" id="mBorrarEj" type="button">Borrar datos de ejemplo</button>` : `<p class="muted">Cargue una finca de ejemplo para ver cómo funciona la app.</p><button class="btn ghost" id="mCargarEj" type="button">Cargar datos de ejemplo</button>`}
     </div>
     <p class="small muted" style="text-align:center">Hato Claro versión ${APP_VERSION}</p>`;
-  $("#fFinca").onsubmit = async (e) => { e.preventDefault(); await save("config", { ...c, nombre: $("#cNombre").value.trim(), precioLitro: pint($("#cPrecio").value), comprador: $("#cComprador").value.trim() }); toast("Datos de la finca guardados"); render(); };
+  $("#fFinca").onsubmit = async (e) => { e.preventDefault(); await save("config", { ...c, nombre: $("#cNombre").value.trim(), precioLitro: pint($("#cPrecio").value), comprador: $("#cComprador").value.trim() }); const nom = $("#cNombre").value.trim(), n = nubeCfg(); if (nubeActiva() && n.rol === "dueno" && nom && nom !== n.fincaNombre) { try { await (await remoto()).renombrar(n.fincaId, nom); await guardarNube({ fincaNombre: nom }); } catch (x) {} } toast("Datos de la finca guardados"); render(); };
   const mi = $("#mInstalar"); if (mi) mi.onclick = async () => { instalarEvt.prompt(); await instalarEvt.userChoice.catch(() => {}); instalarEvt = null; render(); };
   enlazarNube(el);
   estadoAvisos().then((st) => {
@@ -2041,6 +2041,7 @@ async function remoto() {
     async unirse(codigo) { return ok(await c.rpc("unirse_finca", { c: codigo })); },
     async invitar(fincaId, rol) { return ok(await c.rpc("crear_invitacion", { f: fincaId, r: rol })); },
     async miembros(fincaId) { return ok(await c.rpc("miembros_de", { f: fincaId })) || []; },
+    async renombrar(fincaId, nombre) { ok(await c.from("fincas").update({ nombre }).eq("id", fincaId)); },
     async quitar(fincaId, userId) { ok(await c.rpc("quitar_miembro", { f: fincaId, u: userId })); },
     async subir(filas) { ok(await c.from("registros").upsert(filas, { onConflict: "finca_id,coleccion,id" })); },
     async bajar(fincaId, desde) { let q = c.from("registros").select("coleccion,id,datos,borrado,actualizado").eq("finca_id", fincaId).order("actualizado", { ascending: true }).limit(1000); if (desde) q = q.gt("actualizado", desde); return ok(await q) || []; },

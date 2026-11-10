@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.10.7";
+const APP_VERSION = "2.10.8";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -2479,7 +2479,7 @@ function hojaVida(arete) {
   (s) => {
     $$("[data-hv]", s).forEach((b) => (b.onclick = () => hojaVida(b.dataset.hv)));
     $$("[data-ev]", s).forEach((b) => (b.onclick = () => formEditarEvento(S.eventos.find((x) => x.id === b.dataset.ev), () => hojaVida(arete))));
-    $("#hvFoto", s).onclick = () => (foto ? opcionesFoto(an, () => hojaVida(arete)) : pedirFoto(an, () => hojaVida(arete), true));
+    $("#hvFoto", s).onclick = () => opcionesFoto(an, () => hojaVida(arete));
     $("#hvFicha", s).onclick = () => detalle(arete);
     $("#hvCompartir", s).onclick = () => {
       const L = [`*Hoja de vida · ${an.arete}${an.nombre ? " " + an.nombre : ""}*`, `${an.raza || "Raza sin dato"} · ${hembra ? "Hembra" : "Macho"} · ${edadTxt(an.nacimiento)} · ${ESTADOS[an.estado] || an.estado}`];

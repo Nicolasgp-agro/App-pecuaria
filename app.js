@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 
-const APP_VERSION = "2.10.4";
+const APP_VERSION = "2.10.5";
 const GEST = 283, SECADO = 60, ESPERA = 45;
 const COLS = ["animales", "eventos", "entregas", "calidad", "liquidaciones", "gastos", "potreros", "ocupaciones", "config", "fotos"];
 const S = { animales: [], eventos: [], entregas: [], calidad: [], liquidaciones: [], gastos: [], potreros: [], ocupaciones: [], config: [] };
@@ -2051,11 +2051,13 @@ async function iniciarNube() {
   try { const r = await remoto(); sesion = await r.sesion(); } catch (e) { sesion = null; }
   if (nubeActiva()) {
     sincronizar(); setInterval(() => sincronizar(), 3 * 60 * 1000); window.addEventListener("online", () => sincronizar());
+    window.addEventListener("offline", async () => { try { colaPend = (await leerCola()).length; } catch (x) {} if (vista === "mas") render(); });
     // al volver a la app (celular que estaba en segundo plano) trae lo nuevo de una vez
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") sincronizar(); });
   }
 }
-function programarSync() { clearTimeout(timerSync); timerSync = setTimeout(() => sincronizar(), 4000); }
+function programarSync() { clearTimeout(timerSync); timerSync = setTimeout(() => sincronizar(), 4000); leerCola().then((c) => (colaPend = c.length)).catch(() => {}); }
+let colaPend = 0;
 async function leerCola() { return memOnly ? [] : (await tx("cola", "readonly", (st) => st.getAll())) || []; }
 async function sincronizar({ silencioso = true } = {}) {
   if (!nubeActiva() || sincronizando) return;
@@ -2089,8 +2091,10 @@ async function sincronizar({ silencioso = true } = {}) {
       if (filas.length < 1000) break;
     }
     await guardarNube({ ultimoPull: ultimo, ultimaSync: new Date().toISOString(), error: null });
+    colaPend = (await leerCola()).length;
   } catch (e) {
     await guardarNube({ error: String(e.message || e) });
+    try { colaPend = (await leerCola()).length; } catch (x) {}
     if (!silencioso) toast("No se pudo sincronizar: " + (e.message || e));
   } finally { sincronizando = false; }
   if (cambios || vista === "mas") render();
@@ -2127,7 +2131,8 @@ function panelNube() {
       <button class="btn ghost" type="button" id="nuSalir">Salir de la cuenta</button></div>`;
   return `<div class="panel stack"><h2>Finca en la nube</h2>
       <div class="facts small muted"><div>Finca<b>${esc(n.fincaNombre)}</b></div><div>Su rol<b>${esc(ROLES[n.rol] || n.rol || "–")}</b></div><div>Última vez<b>${n.ultimaSync ? new Date(n.ultimaSync).toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" }) : "–"}</b></div></div>
-      ${n.error ? `<p class="small" style="color:var(--bad)">Último intento con error: ${esc(n.error)}</p>` : `<p class="small muted">Los cambios se envían solos cuando hay señal.</p>`}
+      ${typeof navigator !== "undefined" && navigator.onLine === false ? `<p class="small" style="color:var(--warn,#a86b00)"><b>Sin señal ahora.</b> Puede seguir registrando: se envía cuando vuelva la señal${colaPend ? ` (${colaPend} ${colaPend === 1 ? "cambio esperando" : "cambios esperando"})` : ""}.</p>`
+        : n.error ? `<p class="small" style="color:var(--bad)">Último intento con error: ${esc(n.error)}</p>` : `<p class="small muted">${colaPend ? `${colaPend} ${colaPend === 1 ? "cambio" : "cambios"} por enviar. ` : "Todo enviado. "}Los cambios se envían solos cuando hay señal.</p>`}
       <button class="btn" type="button" id="nuSync">Sincronizar ahora</button>
       ${n.rol === "dueno" ? `<button class="btn ghost" type="button" id="nuInvitar">Invitar a alguien</button>` : ""}
       <button class="btn ghost" type="button" id="nuMiembros">Ver quiénes están</button>

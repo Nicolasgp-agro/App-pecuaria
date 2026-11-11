@@ -1,6 +1,6 @@
 // Hato Claro — service worker: guarda la app en el celular para usarla sin señal.
 // Cambia VERSION en cada publicación para que los celulares reciban la actualización.
-const VERSION = "hc-2026-11-09-7";
+const VERSION = "hc-2026-11-11-1";
 const ARCHIVOS = [
   "./",
   "./index.html",
@@ -44,6 +44,7 @@ self.addEventListener("message", (e) => {
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
+  if (new URL(req.url).pathname.includes("/surco/")) return; // Surco Claro tiene su propio service worker
   e.respondWith(
     caches.match(req, { ignoreSearch: true }).then((hit) => {
       if (hit) return hit;
